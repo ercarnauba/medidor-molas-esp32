@@ -1,27 +1,50 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+// ==== ALOCAÇÃO DE PINOS - ESP32-WROOM COM TFT_eSPI ====
+// ⚠️ CONFLITOS RESOLVIDOS - Evita pinos reservados pelo TFT_eSPI (18, 19, 23, 15, 2, 4)
+// Pinos reservados TFT (SPI): GPIO 18 (SCLK), 19 (MISO), 23 (MOSI), 15 (CS), 2 (DC), 4 (RST)
+// Pinos recomendados ESP32-WROOM: 0, 1, 3, 5, 12, 13, 14, 16, 17, 21, 22, 25, 26, 27, 32, 33, 34, 35, 36, 37, 38, 39
+// ⚠️ GPIO 34-39: APENAS ENTRADA (Analog Input Only) - NÃO USE PARA SAÍDA
+// ⚠️ GPIO 0, 2: Boot conflict - evitar se possível
+// ⚠️ GPIO 12: Boot conflict (MTDI) - evitar
+// ⚠️ GPIO 5: Startup timing - evitar se possível
+
 // ==== PINOS DO PROJETO ====
 
-// Célula de carga (HX711)
-constexpr int LOADCELL_DOUT_PIN = 32;
-constexpr int LOADCELL_SCK_PIN  = 33;
+// Célula de carga (HX711) - Pinos de dados simples
+constexpr int LOADCELL_DOUT_PIN = 35;  // GPIO 35 (Input only) - ✅ Apenas leitura
+constexpr int LOADCELL_SCK_PIN  = 36;  // GPIO 36 (Input only) - ✅ Apenas leitura (saída do ESP para sensor)
 
-// Motor de passo (driver tipo A4988/DRV8825)
-constexpr int STEP_PIN   = 25;
-constexpr int DIR_PIN    = 26;
-constexpr int EN_PIN     = 27;
+// Motor de passo (driver tipo A4988/DRV8825) - Pinos de saída digital
+constexpr int STEP_PIN   = 25;  // GPIO 25 - ✅ Saída digital (livre)
+constexpr int DIR_PIN    = 26;  // GPIO 26 - ✅ Saída digital (livre)
+constexpr int EN_PIN     = 27;  // GPIO 27 - ✅ Saída digital (livre)
 
-// Endstop de referência do eixo
-constexpr int ENDSTOP_PIN = 34;
+// Endstop de referência do eixo - Pino de entrada digital
+constexpr int ENDSTOP_PIN = 33;  // GPIO 33 - ✅ Entrada digital (livre)
 
 // Backlight do display TFT
-constexpr int BL_PIN      = 21;
+constexpr int BL_PIN      = 21;  // GPIO 21 - ✅ Configurado tanto em config.h quanto em User_Setup.h
 
-// Encoder KY-040
-constexpr int ENC_CLK_PIN = 18;  // pino CLK
-constexpr int ENC_DT_PIN  = 19;  // pino DT
-constexpr int ENC_SW_PIN  = 23;  // botão do encoder
+// Encoder KY-040 - Pinos de entrada digital (alternados para evitar SPI)
+constexpr int ENC_CLK_PIN = 13;  // GPIO 13 - ✅ Entrada digital (mudado de 18, que é SCLK do LCD)
+constexpr int ENC_DT_PIN  = 14;  // GPIO 14 - ✅ Entrada digital (mudado de 19, que é MISO do LCD)
+constexpr int ENC_SW_PIN  = 12;  // GPIO 12 - ✅ Entrada digital (mudado de 23, que é MOSI do LCD)
+
+// ==== RESUMO DE ALOCAÇÃO (Total: 11 pinos) ====
+// GPIO 12: ENC_SW (Encoder Switch)
+// GPIO 13: ENC_CLK (Encoder Clock)
+// GPIO 14: ENC_DT (Encoder Data)
+// GPIO 21: BL_PIN (Backlight) [Compartilhado com TFT]
+// GPIO 25: STEP_PIN (Motor Step)
+// GPIO 26: DIR_PIN (Motor Direction)
+// GPIO 27: EN_PIN (Motor Enable)
+// GPIO 33: ENDSTOP_PIN (Endstop sensor)
+// GPIO 35: LOADCELL_DOUT (HX711 Data Out)
+// GPIO 36: LOADCELL_SCK (HX711 Clock)
+// ✅ SPI (TFT): GPIO 18 (SCLK), 19 (MISO), 23 (MOSI), 15 (CS), 2 (DC), 4 (RST)
+// ⚠️ EVITADOS: GPIO 0, 2 (Boot), 5 (Timing), 18-19, 23 (SPI do LCD)
 
 // ==== CONSTANTES DE APLICAÇÃO ====
 
