@@ -50,6 +50,14 @@ public:
     // Mostra lista de pesos disponíveis para o usuário escolher
     void drawWeightSelectionScreen(const float* weights, int count, int selectedIndex);
 
+    // ---- FUNÇÕES AUXILIARES PARA TEXTO CUSTOMIZADO ----
+    // Limpa toda a tela
+    void clearScreen();
+    
+    // Desenha texto em posição específica
+    // size: 1 (pequeno), 2 (médio), 3 (grande)
+    void drawText(const char* text, int x, int y, uint16_t color, uint8_t size = 1);
+
 private:
     UiMode _mode = UI_MODE_MENU;
 };

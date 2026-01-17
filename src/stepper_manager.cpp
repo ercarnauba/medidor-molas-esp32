@@ -51,6 +51,14 @@ void StepperManager::moveSteps(long steps, StepperDirection dir, uint16_t usDela
 
     long maxStepsAbs = (long)(STEPPER_MAX_TRAVEL_MM * _stepsPerMm);
 
+    // ========== INTERTRAVAMENTO DE SEGURANÇA COM SINAL DO MICRO SWITCH ==========
+    // Se movimento é BACKWARD (em direção ao home/endstop), verifica se já está acionado
+    if (dir == STEPPER_DIR_BACKWARD && isEndstopPressed()) {
+        Serial.println("[STEPPER] CRITICO: Micro switch JÁ ESTÁ ACIONADO! Movimento BACKWARD BLOQUEADO para segurança.");
+        return;  // Não permite movimento nenhum se endstop já está acionado
+    }
+    // ===========================================================================
+
     // Verifica proteção de curso
     if (labs(_positionSteps) > maxStepsAbs) {
         Serial.println("[STEPPER] WARNING: Already at max travel limit, cannot move.");
@@ -60,7 +68,18 @@ void StepperManager::moveSteps(long steps, StepperDirection dir, uint16_t usDela
     digitalWrite(DIR_PIN, (dir == STEPPER_DIR_FORWARD) ? HIGH : LOW);
 
     for (long i = 0; i < steps; ++i) {
-        // Proteção: se endstop acionado, interrompe
+        // ========== PROTEÇÃO CRÍTICA: Monitorar endstop durante movimento BACKWARD ==========
+        // Durante movimento BACKWARD, verifica continuamente o sinal do micro switch
+        if (dir == STEPPER_DIR_BACKWARD) {
+            if (isEndstopPressed()) {
+                Serial.print("[STEPPER] CRITICO: Micro switch ACIONADO durante movimento BACKWARD! ");
+                Serial.print("Parado após ");
+                Serial.print(i);
+                Serial.println(" passos (proteção ativa).");
+                break;  // Para imediatamente
+            }
+        }
+        // ====================================================================================
         if (isEndstopPressed()) {
             Serial.println("[STEPPER] Endstop triggered during movement!");
             break;
@@ -132,6 +151,40 @@ void StepperManager::homeToEndstop(long maxSteps, uint16_t usDelay) {
 }
 
 void StepperManager::moveToPositionMm(float targetMm, uint16_t usDelay) {
+    // ========== INTERTRAVAMENTO DE SEGURANÇA COM SINAL DO MICRO SWITCH ==========
+    // Se micro switch está acionado, apenas permite movimento FORWARD (longe do home)
+    if (isEndstopPressed()) {
+        Serial.println("[STEPPER] SEGURANCA: Micro switch ACIONADO - Motor em HOME (posição 0mm).");
+        
+        // Se target é um movimento BACKWARD ou para posição negativa, bloqueia
+        if (targetMm <= 0.0f) {
+            Serial.println("[STEPPER] CRITICO: Movimento bloqueado. Motor já está no HOME (endstop acionado).");
+            return;
+        }
+        
+        Serial.print("[STEPPER] Permitido: movimento FORWARD para ");
+        Serial.print(targetMm, 2);
+        Serial.println(" mm (longe do endstop).");
+    }
+    // ===========================================================================
+    
+    // Proteção de limite máximo de curso
+    if (targetMm < 0.0f) {
+        Serial.print("[STEPPER] SEGURANCA: Posição negativa solicitada (");
+        Serial.print(targetMm, 2);
+        Serial.println(" mm), limitando a 0mm.");
+        targetMm = 0.0f;
+    }
+    
+    if (targetMm > STEPPER_MAX_TRAVEL_MM) {
+        Serial.print("[STEPPER] SEGURANCA: Posição ultrapassa máximo (");
+        Serial.print(targetMm, 2);
+        Serial.print(" mm > ");
+        Serial.print(STEPPER_MAX_TRAVEL_MM);
+        Serial.println(" mm), limitando ao máximo.");
+        targetMm = STEPPER_MAX_TRAVEL_MM;
+    }
+    
     long targetSteps = (long)round(targetMm * _stepsPerMm);
     long deltaSteps  = targetSteps - _positionSteps;
 

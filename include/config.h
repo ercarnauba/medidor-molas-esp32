@@ -65,12 +65,26 @@ constexpr float GRAPH_MAX_FORCE_KG = 10.0f;
 constexpr unsigned long STEPPER_HOME_TIMEOUT_MS = 30000;  // 30 segundos
 
 // Velocidade máxima do motor (microseconds entre passos)
-constexpr uint16_t STEPPER_DEFAULT_DELAY_US = 800;
+constexpr int STEPPER_DEFAULT_DELAY_US = 800;
 
 // Máximo de tentativas de homing antes de falhar
 constexpr int STEPPER_HOME_MAX_RETRIES = 1;
 
 // Timeout para HX711 responder (ms)
 constexpr unsigned long SCALE_READ_TIMEOUT_MS = 5000;
+
+// ==== CORES DO DISPLAY TFT (TFT_eSPI) ====
+// Cores RGB565 para uso na interface
+#define TFT_BLACK       0x0000
+#define TFT_WHITE       0xFFFF
+#define TFT_RED         0xF800
+#define TFT_GREEN       0x07E0
+#define TFT_BLUE        0x001F
+#define TFT_CYAN        0x07FF
+#define TFT_MAGENTA     0xF81F
+#define TFT_YELLOW      0xFFE0
+#define TFT_ORANGE      0xFD20
+#define TFT_DARKGREY    0x7BEF
+#define TFT_LIGHTGREY   0xC618
 
 #endif

@@ -248,3 +248,16 @@ void UiManager::drawWeightSelectionScreen(const float* weights, int count, int s
     tft.setCursor(0, 224);
     tft.print("Longo: cancelar");
 }
+
+// ---- FUNÇÕES AUXILIARES ----
+
+void UiManager::clearScreen() {
+    tft.fillScreen(TFT_BLACK);
+}
+
+void UiManager::drawText(const char* text, int x, int y, uint16_t color, uint8_t size) {
+    tft.setTextSize(size);
+    tft.setTextColor(color, TFT_BLACK);
+    tft.setCursor(x, y);
+    tft.print(text);
+}
