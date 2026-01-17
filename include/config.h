@@ -13,8 +13,8 @@
 // ==== PINOS DO PROJETO ====
 
 // Célula de carga (HX711) - Pinos de dados simples
-constexpr int LOADCELL_DOUT_PIN = 35;  // GPIO 35 (Input only) - ✅ Apenas leitura
-constexpr int LOADCELL_SCK_PIN  = 36;  // GPIO 36 (Input only) - ✅ Apenas leitura (saída do ESP para sensor)
+constexpr int LOADCELL_DOUT_PIN = 34;  // GPIO 34 (Input only) - ✅ Apenas leitura
+constexpr int LOADCELL_SCK_PIN  = 16;  // GPIO 16 (Saída digital) - ✅ Pode gerar saída para SCK
 
 // Motor de passo (driver tipo A4988/DRV8825) - Pinos de saída digital
 constexpr int STEP_PIN   = 25;  // GPIO 25 - ✅ Saída digital (livre)
@@ -27,24 +27,24 @@ constexpr int ENDSTOP_PIN = 33;  // GPIO 33 - ✅ Entrada digital (livre)
 // Backlight do display TFT
 constexpr int BL_PIN      = 21;  // GPIO 21 - ✅ Configurado tanto em config.h quanto em User_Setup.h
 
-// Encoder KY-040 - Pinos de entrada digital (alternados para evitar SPI)
+// Encoder KY-040 - Pinos de entrada digital (alternados para evitar SPI e boot conflicts)
 constexpr int ENC_CLK_PIN = 13;  // GPIO 13 - ✅ Entrada digital (mudado de 18, que é SCLK do LCD)
 constexpr int ENC_DT_PIN  = 14;  // GPIO 14 - ✅ Entrada digital (mudado de 19, que é MISO do LCD)
-constexpr int ENC_SW_PIN  = 12;  // GPIO 12 - ✅ Entrada digital (mudado de 23, que é MOSI do LCD)
+constexpr int ENC_SW_PIN  = 17;  // GPIO 17 - ✅ Entrada digital (mudado de 12, que tem boot conflict MTDI)
 
-// ==== RESUMO DE ALOCAÇÃO (Total: 11 pinos) ====
-// GPIO 12: ENC_SW (Encoder Switch)
-// GPIO 13: ENC_CLK (Encoder Clock)
-// GPIO 14: ENC_DT (Encoder Data)
-// GPIO 21: BL_PIN (Backlight) [Compartilhado com TFT]
-// GPIO 25: STEP_PIN (Motor Step)
-// GPIO 26: DIR_PIN (Motor Direction)
-// GPIO 27: EN_PIN (Motor Enable)
-// GPIO 33: ENDSTOP_PIN (Endstop sensor)
-// GPIO 35: LOADCELL_DOUT (HX711 Data Out)
-// GPIO 36: LOADCELL_SCK (HX711 Clock)
+// ==== RESUMO DE ALOCAÇÃO (Total: 11 pinos) - VERSÃO OTIMIZADA ====
+// GPIO 13: ENC_CLK (Encoder Clock) - ✅ Livre
+// GPIO 14: ENC_DT (Encoder Data) - ✅ Livre
+// GPIO 16: LOADCELL_SCK (HX711 Clock) - ✅ Saída digital (foi GPIO 36 input-only)
+// GPIO 17: ENC_SW (Encoder Switch) - ✅ Livre (foi GPIO 12 boot conflict)
+// GPIO 21: BL_PIN (Backlight) - ✅ Livre
+// GPIO 25: STEP_PIN (Motor Step) - ✅ Livre
+// GPIO 26: DIR_PIN (Motor Direction) - ✅ Livre
+// GPIO 27: EN_PIN (Motor Enable) - ✅ Livre
+// GPIO 33: ENDSTOP_PIN (Endstop sensor) - ✅ Livre
+// GPIO 34: LOADCELL_DOUT (HX711 Data Out) - ✅ Input-only (apropriado)
 // ✅ SPI (TFT): GPIO 18 (SCLK), 19 (MISO), 23 (MOSI), 15 (CS), 2 (DC), 4 (RST)
-// ⚠️ EVITADOS: GPIO 0, 2 (Boot), 5 (Timing), 18-19, 23 (SPI do LCD)
+// ⚠️ EVITADOS: GPIO 0, 2 (Boot), 5 (Timing), 12 (Boot MTDI), 36 (Input-only)
 
 // ==== CONSTANTES DE APLICAÇÃO ====
 
