@@ -35,6 +35,9 @@ public:
     // Leitura do endstop
     bool isEndstopPressed() const;
 
+    // StallGuard - verifica se houve detecção de stall e trata
+    bool checkAndHandleStall();
+
 private:
     float _stepsPerMm     = 1600.0f;
     long  _positionSteps  = 0;

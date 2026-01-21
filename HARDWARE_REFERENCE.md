@@ -26,24 +26,27 @@
 | **GPIO25** | STEP | Pulso de passo |
 | **GPIO26** | DIR | Direção (HIGH=forward, LOW=backward) |
 | **GPIO27** | EN | Enable (LOW=motor ligado) |
+| **GPIO22** | UART TX | Comunicação UART (ESP32 -> TMC2209) |
+| **GPIO35** | UART RX | Comunicação UART (TMC2209 -> ESP32) |
+| **GPIO32** | DIAG | Sinal StallGuard (HIGH quando stall detectado) |
 
 ### Célula de Carga (HX711)
 | Pino ESP32 | Função |
 |---|---|
-| **GPIO32** | DOUT (dados do HX711) |
-| **GPIO33** | SCK (clock do HX711) |
+| **GPIO34** | DOUT (dados do HX711, input-only) |
+| **GPIO16** | SCK (clock do HX711) |
 
 ### Fim de Curso (Endstop)
 | Pino ESP32 | Função |
 |---|---|
-| **GPIO34** | ENDSTOP (INPUT_PULLUP, LOW quando pressionado) |
+| **GPIO33** | ENDSTOP (INPUT_PULLUP, LOW quando pressionado) |
 
 ### Encoder KY-040
 | Pino ESP32 | Função |
 |---|---|
-| **GPIO18** | CLK (rotação) |
-| **GPIO19** | DT (rotação) |
-| **GPIO23** | SW (botão) |
+| **GPIO13** | CLK (rotação) |
+| **GPIO14** | DT (rotação) |
+| **GPIO17** | SW (botão) |
 
 ### Display TFT
 | Pino ESP32 | Função |
@@ -55,25 +58,46 @@
 
 ## 🔌 Conexões TMC2209
 
+### Comunicação UART (StallGuard Habilitado)
+```
+ESP32 GPIO22 (TX) -> TMC2209 PDN_UART
+ESP32 GPIO35 (RX) <- TMC2209 PDN_UART
+ESP32 GPIO32     <- TMC2209 DIAG (pull-up interno no ESP32)
+
+Baud Rate: 115200
+Address: 0b00 (padrão, único driver no barramento)
+```
+
 ### Pinos de Microstep (M0, M1)
 ```
-M0 conectado a GPIO ? (recomendado)
-M1 conectado a GPIO ? (recomendado)
+M0 e M1: deixar em aberto (flutuantes)
+Padrão: 16x microsteps
 
-Se não usados (flutuantes): padrão = 16x microsteps
+Configurável via UART: 1, 2, 4, 8, 16, 32, 64, 128, 256 microsteps
 ```
 
-### Pinos de Proteção
+### StallGuard (Detecção de Travamento)
 ```
-DIAG0: Saída de diagnóstico (opcional, monitora motor)
-CFG4: Configuração (deixar em aberto normalmente)
+Pino DIAG conectado a GPIO32
+Quando stall detectado: DIAG vai HIGH
+
+Configuração:
+- SGTHRS: 10 (threshold padrão, ajustável 0-255)
+- Quanto MAIOR o threshold, MENOS sensível
+- Valores recomendados: 5-20 para colisão
+- Motor recua automaticamente 10mm após stall
+
+⚠️ StallGuard NÃO afeta leitura da mola durante teste
+Proteção ativa principalmente no topo do trilho
 ```
 
 ### Potenciômetro de Corrente
 ```
-Regulador VREF no TMC2209
-Ajustar para máx 1.5A para NEMA28
-Fórmula: IMAX = VREF × 2 (A)
+Regulador VREF no TMC2209 (IGNORADO se usar UART)
+Corrente configurada via software: 800mA (NEMA11)
+Fórmula manual: IMAX = VREF × 2 (A)
+
+⚠️ Com comunicação UART ativa, corrente é controlada via código
 ```
 
 ---
@@ -114,21 +138,37 @@ STEPPER_STEPS_PER_MM = (200 × 16) / 1.5 = 2133
 ---
 
 ## ⚙️ Configuração TMC2209
-Para NEMA11: Ajustar para ~0.8-1.0A (não exceder!)
-- Verificar datasheet específico do motorução DIY)
+
+### Corrente do Motor (via UART)
 ```
-Se não houver potenciômetro:
-Soldar resistor (varia conforme variante TMC2209):
-- Típico: 100kΩ resistor para ~1.5A
-- Verificar datasheet específico
+NEMA11 recomendado: 600-1000mA
+Configuração atual: 800mA RMS, 400mA hold
+
+⚠️ Não exceder corrente nominal do motor!
+Verificar datasheet do motor NEMA11 específico
+
+Ajuste via código em config.h:
+TMC_CURRENT_RMS = 800
+TMC_CURRENT_HOLD = 400
 ```
 
-### Status LED
+### Modo de Operação
 ```
-TMC2209 tem LED de status (opcional):
-- Piscando = OK
-- Apagado = Sem alimentação
-- Ligado sempre = Thermal shutdown
+StealthChop (padrão): Silencioso, menos torque
+SpreadCycle: Mais torque, mais barulho
+
+Configurado via software (tmc2209Manager.enableStealthChop)
+```
+
+### Calibração StallGuard
+```
+1. Iniciar com threshold = 10
+2. Fazer teste de movimento completo
+3. Se falsos positivos: aumentar threshold (menos sensível)
+4. Se não detectar colisão: diminuir threshold (mais sensível)
+5. Valor ideal: detecta colisão mas não mola dura
+
+Ajuste em config.h: TMC_STALLGUARD_THRESHOLD
 ```
 
 ---

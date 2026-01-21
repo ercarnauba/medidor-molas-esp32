@@ -1,14 +1,15 @@
 # 🔌 Mapeamento de GPIOs - ESP32-WROOM Medidor de Molas RC
 
 ## Resumo Executivo
-✅ **GPIO TOTALMENTE OTIMIZADOS**
-- Alterações: ENC_CLK (18→13), ENC_DT (19→14), ENC_SW (23→12→17), LOADCELL_SCK (36→16), LOADCELL_DOUT (35→34)
-- Motivo: Remover conflitos SPI, boot timing e limitações input-only
-- Status: ✅ COMPILADO COM SUCESSO - Pronto para hardware
+✅ **GPIO TOTALMENTE OTIMIZADOS COM TMC2209 STALLGUARD**
+- Versão: 2.1.0 - StallGuard Implementado
+- Total pinos: 14 GPIO (11 originais + 3 TMC2209)
+- Novos: UART TX (22), UART RX (35), DIAG (32)
+- Status: ✅ PRONTO PARA HARDWARE
 
 ---
 
-## Alocação Final de Pinos (11 GPIO)
+## Alocação Final de Pinos (14 GPIO + SPI)
 
 | GPIO | Periférico | Função | Tipo | Status |
 |------|-----------|--------|------|--------|
@@ -16,22 +17,46 @@
 | **4** | TFT_eSPI LCD | RST (Reset) | Saída | ✅ Livre |
 | **13** | Encoder KY-040 | CLK (Clock) | Entrada | ✅ Livre |
 | **14** | Encoder KY-040 | DT (Data) | Entrada | ✅ Livre |
-| **16** | HX711 Célula | SCK (Clock) | Saída | ✅ Saída digital (mudado de 36) |
-| **17** | Encoder KY-040 | SW (Button) | Entrada | ✅ Livre (mudado de 12) |
 | **15** | TFT_eSPI LCD | CS (Chip Select) | Saída | ✅ Livre |
+| **16** | HX711 Célula | SCK (Clock) | Saída | ✅ Saída digital |
+| **17** | Encoder KY-040 | SW (Button) | Entrada | ✅ Livre |
 | **18** | TFT_eSPI LCD | SCLK (SPI Clock) | Saída | ✅ SPI dedicado |
 | **19** | TFT_eSPI LCD | MISO (SPI Data In) | Entrada | ✅ SPI dedicado |
-| **21** | Backlight LCD | BL (Backlight) | Saída | ✅ Livre (dual-use) |
+| **21** | Backlight LCD | BL (Backlight) | Saída | ✅ Livre |
+| **22** | **TMC2209** | **UART TX** | **Saída** | **✅ Novo - StallGuard** |
 | **23** | TFT_eSPI LCD | MOSI (SPI Data Out) | Saída | ✅ SPI dedicado |
 | **25** | Motor Passo | STEP | Saída | ✅ Livre |
 | **26** | Motor Passo | DIR | Saída | ✅ Livre |
 | **27** | Motor Passo | EN | Saída | ✅ Livre |
-| **34** | HX711 Célula | DOUT (Data Out) | Entrada | ✅ Input-only (apropriadoopriado) |
-| **36** | HX711 Célula | SCK (Clock) | Saída | ⚠️ Input-only (PROBLEMA) |
+| **32** | **TMC2209** | **DIAG (Stall)** | **Entrada** | **✅ Novo - StallGuard** |
+| **33** | Endstop | Fim de Curso | Entrada | ✅ Proteção adicional |
+| **34** | HX711 Célula | DOUT (Data Out) | Entrada | ✅ Input-only |
+| **35** | **TMC2209** | **UART RX** | **Entrada** | **✅ Novo - StallGuard** |
 
 ---
 
-## ⚠️ PROBLEMAS IDENTIFICADOS
+## Configuração TMC2209 StallGuard
+
+### Novos Pinos Adicionados
+```cpp
+// TMC2209 - Comunicação UART e StallGuard
+constexpr int TMC_TX_PIN   = 22;  // GPIO 22 - UART TX (ESP32 -> TMC2209)
+constexpr int TMC_RX_PIN   = 35;  // GPIO 35 - UART RX (TMC2209 -> ESP32, input-only OK)
+constexpr int TMC_DIAG_PIN = 32;  // GPIO 32 - DIAG (sinal de stall)
+```
+
+### Funcionalidades Implementadas
+- ✅ Comunicação UART 115200 baud
+- ✅ Configuração de corrente via software (800mA RMS)
+- ✅ StallGuard threshold ajustável (padrão: 10)
+- ✅ Detecção automática de travamento mecânico
+- ✅ Recuo automático de 10mm após stall
+- ✅ Alerta no LCD quando detectar stall
+- ✅ Mantém endstop físico (GPIO 33) como proteção adicional
+
+---
+
+## ⚠️ PROBLEMAS IDENTIFICADOS E RESOLVIDOS
 ✅ PROBLEMAS CORRIGIDOS
 
 ### 1. **GPIO 36 (LOADCELL_SCK) - ✅ RESOLVIDO**
@@ -57,21 +82,37 @@
 ℹ️ Se der problemas, alterar em User_Setup.h
 
 ---
-✅ Alocação FINAL - IMPLEMENTADA
+✅ Alocação FINAL - IMPLEMENTADA (v2.1.0 com StallGuard)
 
-Todas as correções já foram aplicadas em config.h:
+Todas as correções e StallGuard já aplicados em config.h:
 
 ```cpp
-// ✅ PRODUÇÃO - VERSÃO FINAL OTIMIZADA:
+// ✅ PRODUÇÃO - VERSÃO 2.1.0 COM STALLGUARD:
+
 // Célula de carga (HX711)
 constexpr int LOADCELL_DOUT_PIN = 34;  // GPIO 34 (Input-only) - ✅
 constexpr int LOADCELL_SCK_PIN  = 16;  // GPIO 16 (Saída digital) - ✅
 
+// Motor de passo (TMC2209)
+constexpr int STEP_PIN   = 25;  // GPIO 25 - ✅
+constexpr int DIR_PIN    = 26;  // GPIO 26 - ✅
+constexpr int EN_PIN     = 27;  // GPIO 27 - ✅
+
+// TMC2209 UART + StallGuard (NOVOS)
+constexpr int TMC_TX_PIN   = 22;  // GPIO 22 - ✅ UART TX
+constexpr int TMC_RX_PIN   = 35;  // GPIO 35 - ✅ UART RX (input-only OK)
+constexpr int TMC_DIAG_PIN = 32;  // GPIO 32 - ✅ StallGuard DIAG
+
+// Endstop (mantido como proteção adicional)
+constexpr int ENDSTOP_PIN = 33;  // GPIO 33 - ✅
+
 // Encoder KY-040
 constexpr int ENC_CLK_PIN = 13;  // GPIO 13 - ✅
 constexpr int ENC_DT_PIN  = 14;  // GPIO 14 - ✅
-constexpr int ENC_SW_PIN  = 17;  // GPIO 17 (sem boot conflict
 constexpr int ENC_SW_PIN  = 17;  // GPIO 17 (evita GPIO 12) - ✅
+
+// Backlight
+constexpr int BL_PIN = 21;  // GPIO 21 - ✅
 ```
 
 ---

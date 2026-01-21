@@ -1,7 +1,7 @@
-# 📊 Medidor de Molas RC - Versão 2.0 (Melhorado)
+# 📊 Medidor de Molas RC - Versão 2.1.0 (TMC2209 StallGuard)
 
-**Data**: 15 de janeiro de 2026  
-**Status**: ✅ Pronto para deployment  
+**Data**: 18 de janeiro de 2026  
+**Status**: ✅ Pronto para deployment com StallGuard  
 **Compilação**: ✅ Sem erros
 
 ---
@@ -14,8 +14,17 @@ Este é um **medidor microcontrolado de constantes de mola (K)** baseado em ESP3
 - Display TFT interativo
 - Calibração automática
 - Armazenamento de calibração em EEPROM
+- **🆕 TMC2209 com StallGuard** para detecção de travamento
 
-### Melhorias na v2.0
+### Novidades na v2.1.0 🆕
+- ✅ **StallGuard**: Detecção automática de travamento mecânico
+- ✅ **Comunicação UART**: Controle avançado do TMC2209
+- ✅ **Recuo automático**: Motor recua 10mm ao detectar colisão
+- ✅ **Alerta visual**: LCD exibe alerta quando detecta stall
+- ✅ **Proteção dupla**: StallGuard + endstop físico
+- ✅ **Não afeta medição**: Threshold ajustado para não interferir em testes
+
+### Melhorias da v2.0
 - ✅ **Correção crítica**: ISR segura (sem `millis()`)
 - ✅ **Validação robusta**: EEPROM, calibração, homing
 - ✅ **Documentação completa**: Hardware + testes
@@ -26,9 +35,10 @@ Este é um **medidor microcontrolado de constantes de mola (K)** baseado em ESP3
 ## 🚀 Quick Start
 
 ### 1. Configuração de Hardware
-Seguir [HARDWARE_SETUP.md](HARDWARE_SETUP.md):
+Seguir [HARDWARE_SETUP.md](HARDWARE_SETUP.md) e **[TMC2209_WIRING.md](TMC2209_WIRING.md)** (novo):
 - Conectar HX711 (célula de carga)
 - Conectar motor de passo + endstop
+- **🆕 Conectar TMC2209 UART** (GPIO 22, 35, 32)
 - Conectar display TFT
 - Conectar encoder KY-040
 
@@ -37,6 +47,11 @@ Seguir [HARDWARE_SETUP.md](HARDWARE_SETUP.md):
 STEPPER_STEPS_PER_MM     // ✅ JÁ CORRETO: 3200 para trilho pitch 1mm
 STEPPER_HOME_DIR_INT     // ⚠️ 0 ou 1, conforme direção do endstop
 STEPPER_MAX_TRAVEL_MM    // Limite mecânico de curso
+
+// 🆕 Parâmetros TMC2209 StallGuard
+TMC_CURRENT_RMS          // 800mA (NEMA11)
+TMC_STALLGUARD_THRESHOLD // 10 (ajustar conforme necessidade)
+TMC_STALL_RETRACT_MM     // 10mm recuo após stall
 ```
 
 **Sistema Confirmado**:
@@ -242,8 +257,12 @@ GRAPH_MAX_FORCE_KG = 10.0f           // Escala visual
 | Documento | Conteúdo | Status |
 |-----------|----------|--------|
 | ARCHITECTURE.md | Diagrama e fluxos | ✅ |
-| HARDWARE_SETUP.md | Componentes e configuração | ✅ 🆕 |
-| TESTING_GUIDE.md | Testes completos | ✅ 🆕 |
+| HARDWARE_SETUP.md | Componentes e configuração | ✅ |
+| HARDWARE_REFERENCE.md | Referência rápida de hardware | ✅ |
+| GPIO_MAPPING.md | Mapeamento completo de pinos | ✅ |
+| **TMC2209_WIRING.md** | **🆕 Conexões TMC2209 StallGuard** | **✅ Novo** |
+| **STALLGUARD_IMPLEMENTATION.md** | **🆕 Detalhes implementação** | **✅ Novo** |
+| TESTING_GUIDE.md | Testes completos | ✅ |
 | CODE_REVIEW.md | Análise técnica + correções | ✅ |
 | CHANGELOG.md | Histórico de versões | ✅ |
 
@@ -255,7 +274,8 @@ GRAPH_MAX_FORCE_KG = 10.0f           // Escala visual
 ✅ Sem erros
 ✅ Sem warnings
 ✅ Compatível com ESP32
-✅ Dependências: HX711@0.7.5, TFT_eSPI@2.5.43
+✅ Dependências: HX711@0.7.5, TFT_eSPI@2.5.43, TMCStepper@0.7.3
+✅ StallGuard: Implementado e testável
 ```
 
 ---
@@ -263,6 +283,7 @@ GRAPH_MAX_FORCE_KG = 10.0f           // Escala visual
 ## 📋 Checklist Pré-Deployment
 
 - [ ] Revisar HARDWARE_SETUP.md
+- [ ] **🆕 Revisar TMC2209_WIRING.md (conexões UART)**
 - [ ] Calcular STEPPER_STEPS_PER_MM
 - [ ] Testar STEPPER_HOME_DIR_INT (0 ou 1)
 - [ ] Calibrar célula com peso conhecido

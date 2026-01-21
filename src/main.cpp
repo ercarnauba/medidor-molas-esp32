@@ -46,7 +46,7 @@ void setup() {
     encoderManager.begin();
     uiManager.begin();
 
-    stepperManager.enable(true);
+    // Motor já está habilitado após stepperManager.begin()
 
     // Posição inicial do encoder
     lastEncPosRaw = encoderManager.getPosition();
@@ -63,11 +63,8 @@ void setup() {
 // ---- LOOP PRINCIPAL ----
 void loop() {
     encoderManager.update();
-
-    // Leitura periódica da célula de carga (útil para calib)
     scaleManager.update();
 
-    // Leitura do encoder (para menu)
     long encPosRaw = encoderManager.getPosition();
     long deltaEnc  = encPosRaw - lastEncPosRaw;
     if (deltaEnc != 0) {
@@ -136,8 +133,8 @@ void runSpringTestWithGraph() {
 
     const float compressionMm = DEFAULT_TEST_COMPRESSION_MM;
     const float initialPositionMm = 30.0f;  // Posição REAL inicial para colocar a mola
-    const float forceThresholdKg = 0.1f;    // Força mínima para detectar contato da mola
-    const float detectionSpeedUsMicros = 1000;  // Velocidade lenta para detecção
+    const float forceThresholdKg = SPRING_CONTACT_FORCE_KG;    // Força mínima para detectar contato da mola
+    const uint16_t detectionSpeedUsMicros = 300;  // Velocidade mais alta para busca contínua
     const int   maxSamples    = MAX_GRAPH_SAMPLES;
 
     // Variáveis críticas de posição
@@ -150,8 +147,9 @@ void runSpringTestWithGraph() {
     uiManager.clearGraphArea();
 
     // ETAPA 1: HOMING - Busca lentamente o micro switch de home, decrementando a posição
-    Serial.println("[TESTE] Etapa 1: Homing lento...");
-    stepperManager.homeToEndstop((long)(STEPPER_MAX_TRAVEL_MM * stepperManager.getStepsPerMm()));
+    Serial.println("[TESTE] Etapa 1: Buscar HOME (descer ate micro switch)...");
+    // Mesma velocidade de ETAPA 3: 133 µs
+    stepperManager.homeToEndstop((long)(STEPPER_HOME_TRAVEL_MM * stepperManager.getStepsPerMm()), 133);
     
     // Verifica se homing foi bem-sucedido
     if (!stepperManager.wasLastHomingSuccessful()) {
@@ -162,20 +160,21 @@ void runSpringTestWithGraph() {
     }
     
     motorRealPositionMm = stepperManager.getPositionMm();
-    Serial.print("[TESTE] Home concluido. Posição REAL do motor: ");
+    Serial.print("[TESTE] Etapa 2: HOME = 0mm definido. Posição REAL atual: ");
     Serial.print(motorRealPositionMm);
     Serial.println(" mm");
 
-    // ETAPA 2: Posiciona em velocidade média para 30mm inicialmente
-    Serial.println("[TESTE] Etapa 2: Posicionando para 30 mm (posição REAL)...");
-    stepperManager.moveToPositionMm(initialPositionMm, 600);  // Velocidade média (600 µs)
+    // ETAPA 3: Retorna 30mm a partir do home
+    Serial.println("[TESTE] Etapa 3: Retornando 30 mm (posicao REAL 30mm)...");
+    // Mesma velocidade da ETAPA 10: 133 µs
+    stepperManager.moveToPositionMm(initialPositionMm, 133);
     motorRealPositionMm = stepperManager.getPositionMm();
     Serial.print("[TESTE] Motor posicionado em posição REAL: ");
     Serial.print(motorRealPositionMm);
     Serial.println(" mm");
 
-    // ETAPA 3: Mensagem no LCD para o usuário posicionar a mola
-    Serial.println("[TESTE] Etapa 3: Aguardando posicionamento da mola pelo usuário...");
+    // ETAPA 4: Mensagem no LCD para o usuário posicionar a mola e confirmar
+    Serial.println("[TESTE] Etapa 4: Aguardando usuario inserir a mola e confirmar no encoder...");
     uiManager.clearScreen();
     uiManager.drawText("=== Posicionar Mola ===", 10, 10, TFT_YELLOW, 2);
     uiManager.drawText("Motor em 30 mm", 10, 50, TFT_WHITE, 1);
@@ -218,41 +217,50 @@ void runSpringTestWithGraph() {
     
     // ETAPA 5: Tara a balança COM a mola já posicionada
     scaleManager.tare();
-    Serial.println("[TESTE] Tara feita com mola posicionada.");
+    Serial.println("[TESTE] Etapa 5: Tara feita com a mola posicionada.");
     
     // ETAPA 6: DETECÇÃO AUTOMÁTICA DO PONTO DE CONTATO DA MOLA
-    Serial.println("[TESTE] Etapa 6: Buscando ponto de contato da mola...");
+    Serial.println("[TESTE] Etapa 6: Iniciando busca da mola (descendo lentamente)...");
     uiManager.clearScreen();
     uiManager.drawText("Buscando mola...", 10, 10, TFT_CYAN, 2);
     
     bool springContactDetected = false;
-    float maxMotorSearchPosRealMm = initialPositionMm - compressionMm;  // Limite mínimo seguro (20mm)
+    float maxMotorSearchPosRealMm = 5.0f;  // Limite mínimo seguro: não descer abaixo de 5 mm (curso total 25 mm)
     
-    // Desce o motor lentamente observando a força
+    // Movimento contínuo em blocos: ~0.25 mm por bloco
+    Serial.println("[TESTE] Descendo continuamente (blocos) ate detectar contato (min 5 mm, curso 25 mm)...");
+    int chunkSteps = (int)(0.25f * stepperManager.getStepsPerMm());
+    if (chunkSteps < 1) chunkSteps = 1;
     while (motorRealPositionMm > maxMotorSearchPosRealMm && !springContactDetected) {
+        // Cancelamento pelo usuário
         encoderManager.update();
-        scaleManager.update();
-        
-        // Desce 0.5mm por iteração
-        motorRealPositionMm -= 0.5f;
-        stepperManager.moveToPositionMm(motorRealPositionMm, (uint16_t)detectionSpeedUsMicros);
-        
-        float currentForceKg = scaleManager.getWeightKg();
-        
-        // Verifica se detectou a mola
-        if (currentForceKg > forceThresholdKg) {
-            Serial.print("[TESTE] MOLA DETECTADA! Força: ");
-            Serial.print(currentForceKg, 3);
-            Serial.print(" kg em posição REAL: ");
-            Serial.print(motorRealPositionMm, 1);
-            Serial.println(" mm");
-            
-            springContactDetected = true;
-            springContactMotorPosRealMm = motorRealPositionMm;
+        // Cancelamento apenas por long press para evitar falso aborto por bouncing
+        if (encoderManager.wasButtonLongPressed()) {
+            Serial.println("[TESTE] Cancelado pelo usuario (long press) durante busca da mola.");
             break;
         }
-        
-        delay(50);
+
+        // Move bloco BACKWARD
+        stepperManager.moveSteps(chunkSteps, STEPPER_DIR_BACKWARD, detectionSpeedUsMicros);
+        motorRealPositionMm = stepperManager.getPositionMm();
+        Serial.print("[TESTE] Posicao REAL apos bloco: ");
+        Serial.print(motorRealPositionMm, 2);
+        Serial.println(" mm");
+
+        // Atualiza força apos o bloco
+        scaleManager.update();
+        float currentForceKg = scaleManager.getWeightKg();
+
+        if (currentForceKg >= forceThresholdKg) {
+            springContactDetected = true;
+            springContactMotorPosRealMm = motorRealPositionMm;
+            Serial.print("[TESTE] MOLA DETECTADA! Forca: ");
+            Serial.print(currentForceKg, 3);
+            Serial.print(" kg em posicao REAL: ");
+            Serial.print(springContactMotorPosRealMm, 1);
+            Serial.println(" mm");
+            break;
+        }
     }
     
     if (!springContactDetected) {
@@ -265,29 +273,29 @@ void runSpringTestWithGraph() {
     }
     
     // ETAPA 7: Retorna à posição de tara (célula = 0kg)
-    Serial.println("[TESTE] Etapa 7: Retornando à posição de tara...");
+    Serial.println("[TESTE] Etapa 7: Recua ate nao tocar (voltar a tara)...");
     uiManager.clearScreen();
     uiManager.drawText("Retornando tara...", 10, 10, TFT_CYAN, 2);
     
     bool taraReached = false;
-    float taraThresholdKg = 0.02f;  // Margem de tara aceitável
+    float taraThresholdKg = SPRING_TARA_THRESHOLD_KG;  // Margem de tara aceitável
     
-    // Sobe o motor lentamente observando a força
+    // Sobe continuamente em blocos observando a força
     while (motorRealPositionMm < initialPositionMm && !taraReached) {
         encoderManager.update();
-        scaleManager.update();
-        
-        // Sobe 0.5mm por iteração
-        motorRealPositionMm += 0.5f;
-        if (motorRealPositionMm > initialPositionMm) {
-            motorRealPositionMm = initialPositionMm;
+        // Cancelamento apenas por long press para evitar falso aborto por bouncing
+        if (encoderManager.wasButtonLongPressed()) {
+            Serial.println("[TESTE] Cancelado pelo usuario (long press) durante recuo.");
+            break;
         }
-        stepperManager.moveToPositionMm(motorRealPositionMm, (uint16_t)detectionSpeedUsMicros);
-        
+
+        stepperManager.moveSteps(chunkSteps, STEPPER_DIR_FORWARD, detectionSpeedUsMicros);
+        motorRealPositionMm = stepperManager.getPositionMm();
+
+        scaleManager.update();
         float currentForceKg = scaleManager.getWeightKg();
         
-        // Verifica se voltou à tara
-        if (currentForceKg < taraThresholdKg) {
+        if (currentForceKg <= taraThresholdKg) {
             Serial.print("[TESTE] TARA ATINGIDA! Força: ");
             Serial.print(currentForceKg, 3);
             Serial.print(" kg em posição REAL: ");
@@ -297,8 +305,6 @@ void runSpringTestWithGraph() {
             taraReached = true;
             break;
         }
-        
-        delay(50);
     }
     
     if (!taraReached) {
@@ -306,7 +312,7 @@ void runSpringTestWithGraph() {
     }
     
     // ETAPA 8: ZERA a referência de posição da mola
-    Serial.println("[TESTE] Etapa 8: Zerando referência de posição da mola...");
+    Serial.println("[TESTE] Etapa 8: Zerando referencia de posicao da mola (leitura 0mm no contato)...");
     Serial.print("[TESTE] Offset de detecção (diferença posição REAL): ");
     Serial.print(springContactMotorPosRealMm, 1);
     Serial.println(" mm");
@@ -317,7 +323,7 @@ void runSpringTestWithGraph() {
     Serial.println("[TESTE] Sistema pronto para iniciar compressão com detecção automática!");
 
     // ETAPA 9: Amostragem de compressão de 10mm com posições de LEITURA vs REAL
-    Serial.println("[TESTE] Etapa 9: Iniciando amostragem de compressão (10mm)...");
+    Serial.println("[TESTE] Etapa 9: Iniciar compressao da mola mm a mm (10mm total)...");
     uiManager.drawTestStatus(0.0f, compressionMm, 0.0f, 0.0f, true, false);
     uiManager.clearGraphArea();
 
@@ -417,15 +423,15 @@ void runSpringTestWithGraph() {
         // Plota ponto/segmento
         uiManager.plotGraphPoint(xNorm, yNorm, (i == 0));
 
-        // Cancelar pelo botão do encoder (clique ou longo)
-        if (encoderManager.wasButtonLongPressed() || encoderManager.wasButtonClicked()) {
-            Serial.println("[TESTE] Cancelado pelo encoder.");
+        // Cancelar apenas por long press para evitar falso aborto
+        if (encoderManager.wasButtonLongPressed()) {
+            Serial.println("[TESTE] Cancelado pelo encoder (long press).");
             break;
         }
     }
 
     // ETAPA 10: Retorna motor para posição inicial 30mm para o usuário retirar a mola
-    Serial.println("[TESTE] Etapa 10: Retornando motor para posição inicial (30 mm) para remover mola...");
+    Serial.println("[TESTE] Etapa 10: Retornando motor para 30mm para remover a mola...");
     uiManager.drawTestStatus(lastForceKg,
                              compressionMm,
                              lastK_kgf_mm,
@@ -436,14 +442,15 @@ void runSpringTestWithGraph() {
     Serial.print("[TESTE] Motor movendo de ");
     Serial.print(springContactMotorPosRealMm, 1);
     Serial.print(" mm para 30 mm...");
-    stepperManager.moveToPositionMm(initialPositionMm);
+    // 6x mais rápido: reduzir atraso de 800 µs para 133 µs
+    stepperManager.moveToPositionMm(initialPositionMm, 133);
     Serial.println(" Pronto!");
     
     // Aguarda um pouco para o motor chegar na posição
     delay(500);
     
     // ETAPA 11: Exibe mensagem para retirar a mola
-    Serial.println("[TESTE] Etapa 11: Aguardando retirada da mola pelo usuário...");
+    Serial.println("[TESTE] Etapa 11: Teste concluido. Aguardando retirada da mola e opcao do usuario...");
     
     // Desenha alerta na área inferior da tela, preservando gráfico e dados
     uiManager.drawText(">>> Retire a mola <<<", 20, 180, TFT_YELLOW, 1);

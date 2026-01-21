@@ -58,8 +58,17 @@ public:
     // size: 1 (pequeno), 2 (médio), 3 (grande)
     void drawText(const char* text, int x, int y, uint16_t color, uint8_t size = 1);
 
+    // ---- ALERTAS DE STALLGUARD ----
+    // Exibe alerta de travamento mecânico detectado pelo StallGuard
+    void showStallAlert();
+    
+    // Limpa alerta de stall após timeout
+    void clearStallAlert();
+
 private:
     UiMode _mode = UI_MODE_MENU;
+    bool _stallAlertVisible = false;
+    unsigned long _stallAlertTime = 0;
 };
 
 extern UiManager uiManager;

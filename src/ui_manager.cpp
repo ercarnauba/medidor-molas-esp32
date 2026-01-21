@@ -261,3 +261,49 @@ void UiManager::drawText(const char* text, int x, int y, uint16_t color, uint8_t
     tft.setCursor(x, y);
     tft.print(text);
 }
+
+void UiManager::showStallAlert() {
+    // Desenha um alerta vermelho centralizado na tela
+    int alertX = 10;
+    int alertY = 100;
+    int alertW = 300;
+    int alertH = 80;
+    
+    // Fundo vermelho do alerta
+    tft.fillRect(alertX, alertY, alertW, alertH, TFT_RED);
+    tft.drawRect(alertX, alertY, alertW, alertH, TFT_WHITE);
+    tft.drawRect(alertX+1, alertY+1, alertW-2, alertH-2, TFT_WHITE);
+    
+    // Texto do alerta
+    tft.setTextColor(TFT_WHITE, TFT_RED);
+    tft.setTextSize(2);
+    
+    tft.setCursor(alertX + 15, alertY + 10);
+    tft.println("ALERTA STALLGUARD!");
+    
+    tft.setTextSize(1);
+    tft.setCursor(alertX + 10, alertY + 35);
+    tft.println("Travamento mecanico detectado");
+    
+    tft.setCursor(alertX + 10, alertY + 50);
+    tft.println("Motor recuado 10mm");
+    
+    tft.setCursor(alertX + 10, alertY + 65);
+    tft.println("Verifique obstrucao no trilho");
+    
+    _stallAlertVisible = true;
+    _stallAlertTime = millis();
+    
+    Serial.println("[UI] Stall alert displayed on LCD");
+}
+
+void UiManager::clearStallAlert() {
+    if (_stallAlertVisible) {
+        // Limpa área do alerta (redesenha tela dependendo do modo)
+        // Por simplicidade, redesenha toda a tela
+        clearScreen();
+        _stallAlertVisible = false;
+        
+        Serial.println("[UI] Stall alert cleared");
+    }
+}

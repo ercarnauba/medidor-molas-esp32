@@ -8,17 +8,34 @@ void StepperManager::begin() {
     pinMode(DIR_PIN,  OUTPUT);
     pinMode(EN_PIN,   OUTPUT);
     pinMode(ENDSTOP_PIN, INPUT_PULLUP);
+    
+    // Estados iniciais - EN_PIN = HIGH desabilita no A4988 (padrão)
+    digitalWrite(STEP_PIN, LOW);
+    digitalWrite(DIR_PIN, LOW);
+    digitalWrite(EN_PIN, HIGH);  // Desabilitado inicialmente
+    
+    Serial.println("[STEPPER] Driver STEP/DIR inicializado (TMC2209 em STEP/DIR)");
+    Serial.print("  STEP_PIN (GPIO"); Serial.print(STEP_PIN); Serial.println(") = OUTPUT LOW");
+    Serial.print("  DIR_PIN (GPIO"); Serial.print(DIR_PIN); Serial.println(") = OUTPUT LOW");
+    Serial.print("  EN_PIN (GPIO"); Serial.print(EN_PIN); Serial.println(") = OUTPUT HIGH (disabled)");
 
     setStepsPerMm(STEPPER_STEPS_PER_MM);
     resetPosition();
 
-    // Desabilita o driver inicialmente
-    enable(false);
+    // Habilita o driver
+    delay(100);
+    enable(true);
+    Serial.println("[STEPPER] Motor driver ENABLED!");
 }
 
 void StepperManager::enable(bool on) {
-    // Na maioria dos drivers, EN = LOW habilita
+    // EN = LOW habilita o A4988 (padrão)
     digitalWrite(EN_PIN, on ? LOW : HIGH);
+    Serial.print("[STEPPER] Motor ");
+    Serial.print(on ? "ENABLED" : "DISABLED");
+    Serial.print(" (EN_PIN=");
+    Serial.print(on ? "LOW" : "HIGH");
+    Serial.println(")");
 }
 
 bool StepperManager::isEndstopPressed() const {
@@ -48,140 +65,101 @@ bool StepperManager::wasLastHomingSuccessful() const {
 
 void StepperManager::moveSteps(long steps, StepperDirection dir, uint16_t usDelay) {
     if (steps <= 0) return;
+    
+    Serial.print("[STEPPER] moveSteps: passos=");
+    Serial.print(steps);
+    Serial.print(", direcao=");
+    Serial.print(dir == STEPPER_DIR_FORWARD ? "AVANCO" : "RETROCESSO");
+    Serial.print(", atraso=");
+    Serial.print(usDelay);
+    Serial.println(" µs");
 
     long maxStepsAbs = (long)(STEPPER_MAX_TRAVEL_MM * _stepsPerMm);
 
-    // ========== INTERTRAVAMENTO DE SEGURANÇA COM SINAL DO MICRO SWITCH ==========
-    // Se movimento é BACKWARD (em direção ao home/endstop), verifica se já está acionado
+    // Segurança: endstop
     if (dir == STEPPER_DIR_BACKWARD && isEndstopPressed()) {
-        Serial.println("[STEPPER] CRITICO: Micro switch JÁ ESTÁ ACIONADO! Movimento BACKWARD BLOQUEADO para segurança.");
-        return;  // Não permite movimento nenhum se endstop já está acionado
-    }
-    // ===========================================================================
-
-    // Verifica proteção de curso
-    if (labs(_positionSteps) > maxStepsAbs) {
-        Serial.println("[STEPPER] WARNING: Already at max travel limit, cannot move.");
+        Serial.println("[STEPPER] SEGURANCA: Micro switch ja pressionado. Movimento bloqueado.");
         return;
     }
 
-    digitalWrite(DIR_PIN, (dir == STEPPER_DIR_FORWARD) ? HIGH : LOW);
+    // Proteção de curso
+    if (labs(_positionSteps) > maxStepsAbs) {
+        Serial.println("[STEPPER] AVISO: Limite de curso maximo atingido.");
+        return;
+    }
 
-    for (long i = 0; i < steps; ++i) {
-        // ========== PROTEÇÃO CRÍTICA: Monitorar endstop durante movimento BACKWARD ==========
-        // Durante movimento BACKWARD, verifica continuamente o sinal do micro switch
-        if (dir == STEPPER_DIR_BACKWARD) {
-            if (isEndstopPressed()) {
-                Serial.print("[STEPPER] CRITICO: Micro switch ACIONADO durante movimento BACKWARD! ");
-                Serial.print("Parado após ");
-                Serial.print(i);
-                Serial.println(" passos (proteção ativa).");
-                break;  // Para imediatamente
-            }
-        }
-        // ====================================================================================
-        if (isEndstopPressed()) {
-            Serial.println("[STEPPER] Endstop triggered during movement!");
+    // Define direção (invertido para TMC2209 no seu hardware: HIGH = FORWARD)
+    digitalWrite(DIR_PIN, (dir == STEPPER_DIR_FORWARD) ? HIGH : LOW);
+    delayMicroseconds(20);  // Setup time para mudar direção
+
+    // Gera pulsos STEP
+    for (long i = 0; i < steps; i++) {
+        // Verifica endstop durante movimento
+        if (dir == STEPPER_DIR_BACKWARD && isEndstopPressed()) {
+            Serial.print("[STEPPER] Micro switch acionado apos ");
+            Serial.print(i);
+            Serial.println(" passos.");
             break;
         }
 
+        // Pulso STEP (ativo alto)
         digitalWrite(STEP_PIN, HIGH);
-        delayMicroseconds(usDelay);
+        delayMicroseconds(10);
         digitalWrite(STEP_PIN, LOW);
         delayMicroseconds(usDelay);
 
-        // Atualiza posição em passos
-        if (dir == STEPPER_DIR_FORWARD) {
-            _positionSteps++;
-        } else {
-            _positionSteps--;
-        }
+        // Atualiza posição
+        _positionSteps += (dir == STEPPER_DIR_FORWARD) ? 1 : -1;
 
-        // Proteção de curso máximo
+        // Proteção de curso máximo por passo
         if (labs(_positionSteps) > maxStepsAbs) {
             Serial.println("[STEPPER] Max travel limit reached, stopping.");
             break;
         }
     }
+
+    Serial.print("[STEPPER] Concluido. Posicao: ");
+    Serial.print(getPositionMm(), 2);
+    Serial.println(" mm");
 }
 
 void StepperManager::homeToEndstop(long maxSteps, uint16_t usDelay) {
-    StepperDirection dirHome =
-        (STEPPER_HOME_DIR_INT == 0) ? STEPPER_DIR_FORWARD : STEPPER_DIR_BACKWARD;
+    StepperDirection dirHome = STEPPER_DIR_BACKWARD;  // Volta para home (para baixo)
+    digitalWrite(DIR_PIN, LOW);  // LOW = backward (ajustado ao invertido acima)
 
-    digitalWrite(DIR_PIN, (dirHome == STEPPER_DIR_FORWARD) ? HIGH : LOW);
-
-    unsigned long startMs = millis();
-    bool homed = false;
-
-    Serial.println("[STEPPER] Starting homing...");
+    Serial.println("[STEPPER] Homing iniciado...");
 
     for (long i = 0; i < maxSteps; ++i) {
         if (isEndstopPressed()) {
-            homed = true;
-            Serial.println("[STEPPER] Endstop found!");
-            break;
-        }
-
-        if (millis() - startMs > STEPPER_HOME_TIMEOUT_MS) {
-            Serial.println("[STEPPER] ERROR: Homing timeout! Endstop not found or stuck.");
-            break;
+            resetPosition();
+            _lastHomingSuccess = true;
+            Serial.println("[STEPPER] Home encontrado!");
+            // Recuar 30mm para posição inicial segura
+            long backoffSteps = (long)(STEPPER_HOME_BACKOFF_MM * _stepsPerMm);
+            Serial.print("[STEPPER] Recuando ");
+            Serial.print(STEPPER_HOME_BACKOFF_MM);
+            Serial.println(" mm a partir do home...");
+            moveSteps(backoffSteps, STEPPER_DIR_FORWARD, usDelay);
+            return;
         }
 
         digitalWrite(STEP_PIN, HIGH);
-        delayMicroseconds(usDelay);
+        delayMicroseconds(10);
         digitalWrite(STEP_PIN, LOW);
         delayMicroseconds(usDelay);
-
-        if (dirHome == STEPPER_DIR_FORWARD) {
-            _positionSteps++;
-        } else {
-            _positionSteps--;
-        }
     }
 
-    if (homed) {
-        resetPosition();
-        _lastHomingSuccess = true;
-        Serial.println("[STEPPER] Homing successful, position reset to 0.");
-    } else {
-        _lastHomingSuccess = false;
-        Serial.println("[STEPPER] CRITICAL: Homing failed! Check endstop connection and STEPPER_HOME_DIR_INT.");
-    }
+    Serial.println("[STEPPER] AVISO: Homing falhou - micro switch nao encontrado!");
+    _lastHomingSuccess = false;
 }
 
 void StepperManager::moveToPositionMm(float targetMm, uint16_t usDelay) {
-    // ========== INTERTRAVAMENTO DE SEGURANÇA COM SINAL DO MICRO SWITCH ==========
-    // Se micro switch está acionado, apenas permite movimento FORWARD (longe do home)
-    if (isEndstopPressed()) {
-        Serial.println("[STEPPER] SEGURANCA: Micro switch ACIONADO - Motor em HOME (posição 0mm).");
-        
-        // Se target é um movimento BACKWARD ou para posição negativa, bloqueia
-        if (targetMm <= 0.0f) {
-            Serial.println("[STEPPER] CRITICO: Movimento bloqueado. Motor já está no HOME (endstop acionado).");
-            return;
-        }
-        
-        Serial.print("[STEPPER] Permitido: movimento FORWARD para ");
-        Serial.print(targetMm, 2);
-        Serial.println(" mm (longe do endstop).");
-    }
-    // ===========================================================================
-    
     // Proteção de limite máximo de curso
     if (targetMm < 0.0f) {
-        Serial.print("[STEPPER] SEGURANCA: Posição negativa solicitada (");
-        Serial.print(targetMm, 2);
-        Serial.println(" mm), limitando a 0mm.");
         targetMm = 0.0f;
     }
     
     if (targetMm > STEPPER_MAX_TRAVEL_MM) {
-        Serial.print("[STEPPER] SEGURANCA: Posição ultrapassa máximo (");
-        Serial.print(targetMm, 2);
-        Serial.print(" mm > ");
-        Serial.print(STEPPER_MAX_TRAVEL_MM);
-        Serial.println(" mm), limitando ao máximo.");
         targetMm = STEPPER_MAX_TRAVEL_MM;
     }
     
@@ -194,4 +172,8 @@ void StepperManager::moveToPositionMm(float targetMm, uint16_t usDelay) {
     long steps = labs(deltaSteps);
 
     moveSteps(steps, dir, usDelay);
+}
+
+bool StepperManager::checkAndHandleStall() {
+    return false;  // A4988 não tem StallGuard
 }
