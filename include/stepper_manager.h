@@ -18,6 +18,10 @@ public:
 
     // Homing até o fim de curso
     void homeToEndstop(long maxSteps, uint16_t usDelay = 800);
+    // Homing com monitoramento externo para abortar (ex.: variação na balança)
+    // monitorFunc(ctx) deve retornar true para ABORTAR imediatamente
+    void homeToEndstopWithMonitor(long maxSteps, uint16_t usDelay,
+                                  bool (*monitorFunc)(void*), void* ctx);
 
     // Verifica se o último homing foi bem-sucedido
     bool wasLastHomingSuccessful() const;

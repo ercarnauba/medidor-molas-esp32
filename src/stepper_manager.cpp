@@ -153,6 +153,48 @@ void StepperManager::homeToEndstop(long maxSteps, uint16_t usDelay) {
     _lastHomingSuccess = false;
 }
 
+void StepperManager::homeToEndstopWithMonitor(long maxSteps, uint16_t usDelay,
+                                             bool (*monitorFunc)(void*), void* ctx) {
+    StepperDirection dirHome = STEPPER_DIR_BACKWARD;  // Volta para home (para baixo)
+    digitalWrite(DIR_PIN, LOW);  // LOW = backward (ajustado ao invertido acima)
+
+    Serial.println("[STEPPER] Homing (monitorado) iniciado...");
+
+    for (long i = 0; i < maxSteps; ++i) {
+        // Verifica endstop antes do passo
+        if (isEndstopPressed()) {
+            resetPosition();
+            _lastHomingSuccess = true;
+            Serial.println("[STEPPER] Home encontrado!");
+            // Recuar para posição inicial segura
+            long backoffSteps = (long)(STEPPER_HOME_BACKOFF_MM * _stepsPerMm);
+            Serial.print("[STEPPER] Recuando ");
+            Serial.print(STEPPER_HOME_BACKOFF_MM);
+            Serial.println(" mm a partir do home...");
+            moveSteps(backoffSteps, STEPPER_DIR_FORWARD, usDelay);
+            return;
+        }
+
+        // Avalia callback de monitoramento (ex.: balança)
+        if (monitorFunc && monitorFunc(ctx)) {
+            Serial.print("[STEPPER] Homing abortado pelo monitor externo apos ");
+            Serial.print(i);
+            Serial.println(" passos.");
+            _lastHomingSuccess = false;
+            return;
+        }
+
+        // Executa um passo
+        digitalWrite(STEP_PIN, HIGH);
+        delayMicroseconds(10);
+        digitalWrite(STEP_PIN, LOW);
+        delayMicroseconds(usDelay);
+    }
+
+    Serial.println("[STEPPER] AVISO: Homing falhou - micro switch nao encontrado!");
+    _lastHomingSuccess = false;
+}
+
 void StepperManager::moveToPositionMm(float targetMm, uint16_t usDelay) {
     // Proteção de limite máximo de curso
     if (targetMm < 0.0f) {

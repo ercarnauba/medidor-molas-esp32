@@ -31,8 +31,8 @@ private:
     int _lastButtonReading = HIGH;
     int _buttonStableState = HIGH;
     bool _longPressReported = false;
-    static constexpr unsigned long DEBOUNCE_MS = 100;      // debounce maior para evitar falso clique
-    static constexpr unsigned long LONG_PRESS_MS = 800;    // long press timeout
+    static constexpr unsigned long DEBOUNCE_MS = 350;      // debounce aumentado para evitar falso clique
+    static constexpr unsigned long LONG_PRESS_MS = 1000;   // long press timeout
 };
 
 extern EncoderManager encoderManager;

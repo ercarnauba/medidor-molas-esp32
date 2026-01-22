@@ -77,6 +77,20 @@ private:
     bool userConfirmedRemoval;
     bool compressionSamplingDone;
     
+    // Flags de execução para estados (não usar static nos métodos)
+    bool screenShownReady;
+    bool homingExecuted;
+    bool moveExecuted;
+
+    // Baseline da balança para detectar alteração durante homing
+    float homingBaselineKg = 0.0f;
+
+    // Tempo de entrada no estado READY para gating de clique
+    unsigned long readyEntryTimeMs = 0;
+
+    // Tempo de entrada no estado AWAIT_SPRING_PLACEMENT para gating de clique
+    unsigned long awaitSpringEntryTimeMs = 0;
+    
     // Métodos internos para cada etapa
     void executeStateReady();
     void executeStateInitial();

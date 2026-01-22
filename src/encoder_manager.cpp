@@ -67,18 +67,24 @@ void EncoderManager::setPosition(long pos) {
 }
 
 bool EncoderManager::wasButtonClicked() {
+    unsigned long now = millis();
+    
+    // Primeiro verifica debounce
+    if (now - _lastClickMillis <= DEBOUNCE_MS) {
+        return false;  // Ainda em debounce, ignorar
+    }
+    
+    // Depois lê flag de clique
     noInterrupts();
     bool clicked = _buttonClicked;
     if (clicked) _buttonClicked = false;
     interrupts();
 
-    if (!clicked) return false;
-
-    unsigned long now = millis();
-    if (now - _lastClickMillis > DEBOUNCE_MS) {
+    if (clicked) {
         _lastClickMillis = now;
         return true;
     }
+    
     return false;
 }
 
@@ -113,5 +119,8 @@ void IRAM_ATTR encoderISR() {
 void IRAM_ATTR encoderButtonISR() {
     // Marca apenas que o botão foi pressionado; debounce é tratado no contexto principal
     // NÃO chamar millis() aqui - não é seguro em ISRs
-    _encPtr->_buttonClicked = true;
+    // NÃO setar novamente se já foi setado para evitar phantom clicks
+    if (!_encPtr->_buttonClicked) {
+        _encPtr->_buttonClicked = true;
+    }
 }

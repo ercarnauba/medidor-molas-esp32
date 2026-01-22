@@ -5,6 +5,30 @@
 #include "ui_manager.h"
 #include "config.h"
 
+// Baseline global ao arquivo para monitorar homing
+static float g_homingBaselineKg = 0.0f;
+static unsigned long g_lastHomingMonitorMs = 0;
+
+// Callback de monitoramento para abortar homing quando houver alteração na balança
+static bool homingWeightMonitor(void* ctx) {
+    // Throttle: só checa em intervalos para evitar jitter
+    unsigned long now = millis();
+    if ((now - g_lastHomingMonitorMs) < HOMING_MONITOR_INTERVAL_MS) {
+        return false;
+    }
+    g_lastHomingMonitorMs = now;
+
+    // Leitura rápida, não bloqueante (se não pronto, mantém último)
+    float kg = scaleManager.peekWeightKgFast();
+    float delta = kg - g_homingBaselineKg;
+    if (delta < 0.0f) delta = -delta;
+    if (delta >= HOMING_WEIGHT_DELTA_KG) {
+        // Alteração significativa detectada durante homing: abortar
+        return true;
+    }
+    return false;
+}
+
 TestMolaGrafset::TestMolaGrafset()
     : currentState(STATE_INITIAL),
       motorRealPositionMm(0.0f),
@@ -27,7 +51,10 @@ TestMolaGrafset::TestMolaGrafset()
       springContactDetected(false),
       taraReached(false),
       userConfirmedRemoval(false),
-      compressionSamplingDone(false)
+      compressionSamplingDone(false),
+      screenShownReady(false),
+      homingExecuted(false),
+      moveExecuted(false)
 {
 }
 
@@ -54,6 +81,11 @@ void TestMolaGrafset::start() {
     screenShownReturnInitial = false;
     screenShownShowResults = false;
     
+    screenShownReady = false;
+    homingExecuted = false;
+    moveExecuted = false;
+    readyEntryTimeMs = 0;
+    
     springReadyConfirmed = false;
     springContactDetected = false;
     taraReached = false;
@@ -62,14 +94,7 @@ void TestMolaGrafset::start() {
     
     stateStartTime = millis();
     
-    // Exibe tela de confirmação
-    uiManager.clearScreen();
-    uiManager.drawText("=== Teste de Mola ===", 10, 40, TFT_YELLOW, 2);
-    uiManager.drawText("", 10, 80, TFT_WHITE, 1);
-    uiManager.drawText("Click encoder", 10, 120, TFT_CYAN, 2);
-    uiManager.drawText("para iniciar", 10, 145, TFT_CYAN, 2);
-    uiManager.drawText("", 10, 180, TFT_WHITE, 1);
-    uiManager.drawText("Long press para cancelar", 10, 220, TFT_RED, 1);
+    // NÃO desenhar tela aqui - será desenhada no executeStateReady()
 }
 
 void TestMolaGrafset::tick() {
@@ -128,18 +153,37 @@ void TestMolaGrafset::reset() {
 
 // ============== ETAPA PRONTO (READY) ==============
 void TestMolaGrafset::executeStateReady() {
-    static bool screenShown = false;
-    
-    if (!screenShown) {
+    if (!screenShownReady) {
         Serial.println("[TESTE] Aguardando confirmação do usuário para iniciar...");
-        screenShown = true;
+        
+        // Desenha tela de confirmação
+        uiManager.clearScreen();
+        uiManager.drawText("=== Teste de Mola ===", 10, 40, TFT_YELLOW, 2);
+        uiManager.drawText("", 10, 80, TFT_WHITE, 1);
+        uiManager.drawText("Click para iniciar", 10, 120, TFT_CYAN, 2);
+        uiManager.drawText("", 10, 180, TFT_WHITE, 1);
+        uiManager.drawText("Long press para cancelar", 10, 220, TFT_RED, 1);
+        
+        // IMPORTANTE: Limpar qualquer click pendente do teste anterior
+        // Isso evita que um click "guardado" inicie o novo teste automaticamente
+        encoderManager.wasButtonClicked();  // Consome qualquer click pendente
+        encoderManager.wasButtonLongPressed(); // Consome long press pendente também
+        
+        screenShownReady = true;
+        readyEntryTimeMs = millis();
+        return;  // Aguarda próximo tick para processar entrada
     }
     
+    // Gating: aguarda um período após mostrar a tela para aceitar cliques (800ms para segurança extra)
+    if (millis() - readyEntryTimeMs < 800) {
+        return;
+    }
+
     // Verifica clique para iniciar
     if (encoderManager.wasButtonClicked()) {
         Serial.println("[TESTE] Usuário confirmou. Iniciando teste...");
         currentState = STATE_INITIAL;
-        screenShown = false;
+        screenShownReady = false;
         return;
     }
     
@@ -147,7 +191,7 @@ void TestMolaGrafset::executeStateReady() {
     if (encoderManager.wasButtonLongPressed()) {
         Serial.println("[TESTE] Teste cancelado pelo usuário.");
         finished = true;
-        screenShown = false;
+        screenShownReady = false;
         return;
     }
 }
@@ -163,20 +207,78 @@ void TestMolaGrafset::executeStateInitial() {
 // ============== ETAPA HOMING ==============
 void TestMolaGrafset::executeStateHoming() {
     // Executa homing apenas uma vez
-    static bool homingExecuted = false;
-    
     if (!homingExecuted) {
-        stepperManager.homeToEndstop((long)(STEPPER_HOME_TRAVEL_MM * stepperManager.getStepsPerMm()), 133);
+        Serial.println("[DEBUG] Iniciando sequência de homing...");
+        
+        // Limpa tela e mostra mensagem de homing
+        uiManager.clearScreen();
+        uiManager.drawText("=== Homing ===", 10, 80, TFT_CYAN, 2);
+        uiManager.drawText("Buscando HOME...", 10, 130, TFT_YELLOW, 2);
+        uiManager.drawText("Aguarde...", 10, 180, TFT_WHITE, 1);
+        
+        // Captura baseline da balança para detectar alterações durante homing
+        scaleManager.update();
+        homingBaselineKg = scaleManager.getWeightKg();
+        g_homingBaselineKg = homingBaselineKg;
+        Serial.print("[DEBUG] Baseline da balança (kg): ");
+        Serial.println(homingBaselineKg, 3);
+
+        // IMPORTANTE: Usar limite MUITO grande (250mm = 400000 passos a 1600 spm)
+        // O motor será parado APENAS pelo micro switch, não por limite de movimento
+        long maxSteps = (long)(250.0f * stepperManager.getStepsPerMm());
+        Serial.print("[DEBUG] maxSteps calculado: ");
+        Serial.println(maxSteps);
+        
+        // Homing com monitoramento de alteração de peso na balança
+        stepperManager.homeToEndstopWithMonitor(maxSteps, 133, homingWeightMonitor, this);
         homingExecuted = true;
         
-        if (!stepperManager.wasLastHomingSuccessful()) {
-            Serial.println("[TESTE] ERRO: Homing falhou!");
-            uiManager.drawTestStatus(0.0f, DEFAULT_TEST_COMPRESSION_MM, 0.0f, 0.0f, false, false);
-            delay(2000);
+        Serial.println("[DEBUG] homeToEndstop() retornou, aguardando estabilização...");
+        delay(200);  // Aguardar estabilização
+        
+        bool homingSuccess = stepperManager.wasLastHomingSuccessful();
+        Serial.print("[DEBUG] wasLastHomingSuccessful() retornou: ");
+        Serial.println(homingSuccess ? "true (SUCESSO)" : "false (FALHOU)");
+        
+        if (!homingSuccess) {
+            Serial.println("[DEBUG] Homing falhou/abortado. Verificando alteração de peso na balança...");
+            delay(100);
+            scaleManager.update();
+            float currentWeight = scaleManager.getWeightKg();
+            float delta = currentWeight - homingBaselineKg;
+            if (delta < 0.0f) delta = -delta;
+            Serial.print("[DEBUG] Peso atual: ");
+            Serial.print(currentWeight);
+            Serial.print(" Kg, delta vs baseline: ");
+            Serial.print(delta);
+            Serial.println(" Kg");
+
+            if (delta >= HOMING_WEIGHT_DELTA_KG || currentWeight >= SPRING_CONTACT_FORCE_KG) {
+                // ALARME: Alteração de peso detectada durante homing → possível objeto/mola colocada
+                Serial.println("[ALARME] *** ALARME DE HOMING: Objeto detectado durante homing ***");
+                uiManager.clearScreen();
+                uiManager.drawText("=== ALARME ===", 10, 40, TFT_RED, 2);
+                uiManager.drawText("Objeto detectado", 10, 80, TFT_RED, 2);
+                uiManager.drawText("durante HOMING!", 10, 105, TFT_RED, 2);
+                uiManager.drawText("", 10, 140, TFT_WHITE, 1);
+                uiManager.drawText("Remova a mola/objeto", 10, 160, TFT_YELLOW, 1);
+                uiManager.drawText("e confirme para tentar", 10, 175, TFT_YELLOW, 1);
+                uiManager.drawText("novamente.", 10, 190, TFT_YELLOW, 1);
+
+                delay(3000);
+            } else {
+                // Falha sem alteração de peso – provável problema mecânico ou switch
+                Serial.println("[DEBUG] Homing falhou SEM alteração significativa de peso.");
+                uiManager.drawTestStatus(0.0f, DEFAULT_TEST_COMPRESSION_MM, 0.0f, 0.0f, false, false);
+                delay(3000);
+            }
+            
             finished = true;
             homingExecuted = false;
             return;
         }
+        
+        Serial.println("[DEBUG] Homing com sucesso, continuando teste...");
         
         motorRealPositionMm = stepperManager.getPositionMm();
         Serial.print("[TESTE] Etapa 2: HOME = 0mm definido. Posição REAL atual: ");
@@ -191,8 +293,6 @@ void TestMolaGrafset::executeStateHoming() {
 
 // ============== RETORNA 30MM ==============
 void TestMolaGrafset::executeStateReturn30mm() {
-    static bool moveExecuted = false;
-    
     if (!moveExecuted) {
         Serial.println("[TESTE] Etapa 3: Retornando 30 mm...");
         stepperManager.moveToPositionMm(30.0f, 133);
@@ -223,6 +323,16 @@ void TestMolaGrafset::executeStateAwaitSpringPlacement() {
         
         userInteractionTimeout = millis() + 120000;  // 2 minutos
         screenShownAwaitSpringPlacement = true;
+        awaitSpringEntryTimeMs = millis();  // Marca entrada no estado
+        
+        // Consome cliques pendentes no primeiro frame
+        encoderManager.wasButtonClicked();
+        encoderManager.wasButtonLongPressed();
+    }
+    
+    // Guard: ignora cliques nos primeiros 500ms após entrada no estado
+    if ((millis() - awaitSpringEntryTimeMs) < 500) {
+        return;
     }
     
     // Verifica clique
@@ -269,8 +379,13 @@ void TestMolaGrafset::executeStateTare() {
 void TestMolaGrafset::executeStateFindSpringContact() {
     if (!screenShownFindSpringContact) {
         Serial.println("[TESTE] Etapa 6: Iniciando busca da mola...");
+        
+        // Limpa tela e mostra mensagem de busca
         uiManager.clearScreen();
-        uiManager.drawText("Buscando mola...", 10, 10, TFT_CYAN, 2);
+        uiManager.drawText("=== Busca Mola ===", 10, 80, TFT_CYAN, 2);
+        uiManager.drawText("Procurando...", 10, 130, TFT_YELLOW, 2);
+        uiManager.drawText("Aguarde...", 10, 180, TFT_WHITE, 1);
+        
         screenShownFindSpringContact = true;
     }
     
@@ -295,7 +410,7 @@ void TestMolaGrafset::executeStateFindSpringContact() {
         }
         
         // Move down
-        stepperManager.moveSteps(chunkSteps, STEPPER_DIR_BACKWARD, 300);
+        stepperManager.moveSteps(chunkSteps, STEPPER_DIR_BACKWARD, 100);
         motorRealPositionMm = stepperManager.getPositionMm();
         
         float currentForceKg = scaleManager.getWeightKg();
@@ -315,6 +430,43 @@ void TestMolaGrafset::executeStateFindSpringContact() {
         }
     } else if (!springContactDetected) {
         Serial.println("[TESTE] ERRO: Não foi possível detectar o ponto de contato!");
+        
+        // Exibir alarme no TFT
+        uiManager.clearScreen();
+        uiManager.drawText("=== ALARME ===", 10, 40, TFT_RED, 2);
+        uiManager.drawText("", 10, 80, TFT_WHITE, 1);
+        uiManager.drawText("Mola NAO DETECTADA!", 10, 100, TFT_RED, 2);
+        uiManager.drawText("", 10, 140, TFT_WHITE, 1);
+        uiManager.drawText("Verificar:", 10, 160, TFT_YELLOW, 1);
+        uiManager.drawText("- Mola posicionada?", 10, 175, TFT_YELLOW, 1);
+        uiManager.drawText("- Balanca calibrada?", 10, 190, TFT_YELLOW, 1);
+        uiManager.drawText("", 10, 220, TFT_WHITE, 1);
+        uiManager.drawText("Click para tentar novamente", 10, 240, TFT_CYAN, 1);
+        
+        Serial.println("[TESTE] Aguardando confirmação para tentar novamente...");
+        userInteractionTimeout = millis() + 60000;  // 1 minuto
+        
+        // Aguardar clique do usuário
+        while (millis() < userInteractionTimeout) {
+            encoderManager.update();
+            scaleManager.update();
+            
+            if (encoderManager.wasButtonClicked()) {
+                Serial.println("[TESTE] Usuário optou por tentar novamente.");
+                // Reseta e volta ao HOMING para garantir posição segura antes do novo ciclo
+                currentState = STATE_HOMING;
+                homingExecuted = false;
+                moveExecuted = false;
+                screenShownAwaitSpringPlacement = false;
+                searchStarted = false;
+                screenShownFindSpringContact = false;
+                springContactDetected = false;
+                return;
+            }
+        }
+        
+        // Timeout - voltar ao menu
+        Serial.println("[TESTE] Timeout no alarme de mola não detectada.");
         finished = true;
         searchStarted = false;
         screenShownFindSpringContact = false;
@@ -325,8 +477,7 @@ void TestMolaGrafset::executeStateFindSpringContact() {
 void TestMolaGrafset::executeStateReturnToTare() {
     if (!screenShownReturnToTare) {
         Serial.println("[TESTE] Etapa 7: Recua ate nao tocar...");
-        uiManager.clearScreen();
-        uiManager.drawText("Retornando tara...", 10, 10, TFT_CYAN, 2);
+        // Não limpa tela - mantém gráfico visível
         screenShownReturnToTare = true;
     }
     
@@ -349,7 +500,7 @@ void TestMolaGrafset::executeStateReturnToTare() {
             return;
         }
         
-        stepperManager.moveSteps(chunkSteps, STEPPER_DIR_FORWARD, 300);
+        stepperManager.moveSteps(chunkSteps, STEPPER_DIR_FORWARD, 100);
         motorRealPositionMm = stepperManager.getPositionMm();
         
         float currentForceKg = scaleManager.getWeightKg();
@@ -392,6 +543,7 @@ void TestMolaGrafset::executeStateZeroReference() {
 void TestMolaGrafset::executeStateCompressionSampling() {
     if (!screenShownCompressionSampling) {
         Serial.println("[TESTE] Etapa 9: Iniciando amostragem de compressão (10mm)...");
+        uiManager.clearScreen();
         uiManager.drawTestStatus(0.0f, DEFAULT_TEST_COMPRESSION_MM, 0.0f, 0.0f, true, false);
         uiManager.clearGraphArea();
         

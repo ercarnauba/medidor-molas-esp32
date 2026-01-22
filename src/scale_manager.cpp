@@ -104,3 +104,20 @@ void ScaleManager::saveCalibrationToEEPROM() {
     Serial.println("[SCALE] WARNING: EEPROM not available on this platform.");
 #endif
 }
+
+bool ScaleManager::isReady() const {
+    return scale.is_ready();
+}
+
+float ScaleManager::peekWeightKgFast() {
+    // Leitura instantânea: usa leitura bruta e converte com offset e fator
+    if (!scale.is_ready()) {
+        return _currentKg;  // mantém último valor se não estiver pronto
+    }
+
+    long raw = scale.read();          // leitura bruta única (rápida)
+    long offset = scale.get_offset(); // offset atual (armazenado no HX711 lib)
+    long diff = raw - offset;
+    float kg = (float)diff / _calibFactor;
+    return kg;
+}

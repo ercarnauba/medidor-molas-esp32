@@ -7,11 +7,11 @@
 UiManager uiManager;
 static TFT_eSPI tft = TFT_eSPI();
 
-// Área do gráfico (ajuste se quiser)
-static const int GRAPH_X0 = 20;
-static const int GRAPH_Y0 = 70;
-static const int GRAPH_W  = 200;
-static const int GRAPH_H  = 120;
+// Área do gráfico maximizada ao limite da tela
+static const int GRAPH_X0 = 5;
+static const int GRAPH_Y0 = 35;
+static const int GRAPH_W  = 310;
+static const int GRAPH_H  = 220;
 
 static bool lastPointValid = false;
 static int  lastPx = 0;
@@ -88,65 +88,75 @@ void UiManager::drawTestStatus(float forceKg,
 {
     _mode = UI_MODE_TEST;
 
-    // Cabeçalho
+    // Cabeçalho com texto aumentado
     tft.setTextSize(2);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.fillRect(0, 0, 240, 30, TFT_BLACK);
-    tft.setCursor(0, 0);
-    tft.print("Teste mola (k)");
+    tft.setTextColor(TFT_CYAN, TFT_BLACK);
+    tft.fillRect(0, 0, 320, 32, TFT_BLACK);
+    tft.setCursor(3, 2);
+    tft.print("TESTE MOLA");
+    tft.setCursor(150, 2);
+    tft.printf("F:%.1f", forceKg);
+    tft.setCursor(3, 16);
+    tft.printf("C:%.1fmm", compressionMm);
+    tft.setCursor(150, 16);
+    tft.print("kg");
 
-    // Forca
-    tft.fillRect(0, 30, 240, 20, TFT_BLACK);
-    tft.setCursor(0, 30);
-    tft.printf("F: %.2f kg", forceKg);
+    // Linha divisória
+    tft.drawFastHLine(0, 33, 320, TFT_DARKGREY);
 
-    // Compressao alvo
-    tft.fillRect(0, 50, 240, 20, TFT_BLACK);
-    tft.setCursor(0, 50);
-    tft.printf("Comp: %.1f mm", compressionMm);
+    // Área do gráfico: y=35 até y=255 (altura 220px)
+    // O gráfico será desenhado entre essas coordenadas
 
-    // K (parte inferior direita)
+    // Rodapé compacto com resultados
+    tft.fillRect(0, 258, 320, 22, TFT_BLACK);
     tft.setTextSize(1);
-    tft.fillRect(0, 200, 240, 40, TFT_BLACK);
-    tft.setCursor(0, 200);
+    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+    tft.setCursor(3, 260);
     if (done) {
-        tft.printf("K: %.3f kgf/mm", k_kgf_mm);
-        tft.setCursor(0, 212);
-        tft.printf("K: %.3f N/mm",   k_N_mm);
+        tft.printf("K:%.3f kgf/mm", k_kgf_mm);
+        tft.setCursor(3, 270);
+        tft.printf("K:%.3f N/mm", k_N_mm);
     } else {
-        tft.print("K: ---");
+        tft.print("K:calc...");
     }
 
-    // Status
-    tft.setCursor(140, 200);
+    // Status compacto
+    tft.setTextColor(TFT_GREEN, TFT_BLACK);
+    tft.setCursor(200, 265);
     if (running) {
-        tft.print("Rodando...");
+        tft.print("RUN");
     } else if (done) {
-        tft.print("Concluido");
+        tft.print("OK");
     } else {
-        tft.print("Pronto");
+        tft.print("RDY");
     }
 
-    // Mensagem
-    tft.setCursor(0, 228);
-    tft.print("Click encoder: voltar ao menu");
+    // Instrução
+    tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+    tft.setCursor(130, 260);
+    tft.print("Click:menu");
 }
 
-// Limpa área de gráfico
+// Limpa área de gráfico maximizada ao limite
 void UiManager::clearGraphArea() {
-    tft.fillRect(GRAPH_X0 - 2, GRAPH_Y0 - 2,
-                 GRAPH_W + 4, GRAPH_H + 4, TFT_BLACK);
+    // Área do gráfico: x=5, y=35, largura=310, altura=220
+    const int gx = 5;
+    const int gy = 35;
+    const int gw = 310;
+    const int gh = 220;
+    
+    tft.fillRect(gx - 1, gy - 1, gw + 2, gh + 2, TFT_BLACK);
 
-    // Desenha moldura
-    tft.drawRect(GRAPH_X0, GRAPH_Y0, GRAPH_W, GRAPH_H, TFT_DARKGREY);
+    // Moldura do gráfico
+    tft.drawRect(gx, gy, gw, gh, TFT_DARKGREY);
 
-    // Eixos simples
+    // Labels dos eixos compactos
     tft.setTextSize(1);
-    tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    tft.setCursor(GRAPH_X0, GRAPH_Y0 - 10);
-    tft.print("Forca");
-    tft.setCursor(GRAPH_X0 + GRAPH_W - 40, GRAPH_Y0 + GRAPH_H + 2);
-    tft.print("Desloc.");
+    tft.setTextColor(TFT_CYAN, TFT_BLACK);
+    tft.setCursor(gx + 3, gy + 3);
+    tft.print("F(kg)");
+    tft.setCursor(gx + gw - 48, gy + gh - 11);
+    tft.print("x(mm)");
 
     lastPointValid = false;
 }

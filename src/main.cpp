@@ -11,7 +11,8 @@
 
 enum AppState {
     APP_STATE_MENU = 0,
-    APP_STATE_IDLE
+    APP_STATE_IDLE,
+    APP_STATE_WAITING_TO_RETURN_MENU
 };
 
 static AppState appState = APP_STATE_MENU;
@@ -92,6 +93,10 @@ void loop() {
         if (encoderManager.wasButtonClicked()) {
             if (menuIndex == 0) {
                 // Teste da mola com Grafset
+                // Aguarda um momento para evitar que o mesmo clique inicie o teste
+                delay(100);
+                encoderManager.wasButtonClicked(); // Consome qualquer clique residual
+                encoderManager.wasButtonLongPressed(); // Consome long press também
                 testMolaGrafset.start();
                 appState = APP_STATE_IDLE;
             } else if (menuIndex == 1) {
@@ -116,8 +121,19 @@ void loop() {
         // Grafset rodando
         testMolaGrafset.tick();
         
-        // Se terminou, volta ao menu
+        // Se terminou, aguarda clique para voltar ao menu
         if (testMolaGrafset.isFinished()) {
+            appState = APP_STATE_WAITING_TO_RETURN_MENU;
+        }
+        break;
+    }
+
+    case APP_STATE_WAITING_TO_RETURN_MENU: {
+        // Aguarda clique do usuário para retornar ao menu
+        // NÃO chamar update() aqui - já é feito no loop principal!
+        
+        if (encoderManager.wasButtonClicked()) {
+            Serial.println("[MENU] Retornando ao menu...");
             testMolaGrafset.reset();
             appState = APP_STATE_MENU;
             menuIndex = 0;
@@ -130,9 +146,6 @@ void loop() {
         appState = APP_STATE_MENU;
         break;
     }
-
-    // Pequeno delay para aliviar a CPU
-    delay(10);
 }
 
 // ========================================================

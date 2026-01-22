@@ -22,6 +22,10 @@ public:
     void loadCalibrationFromEEPROM();
     void saveCalibrationToEEPROM();
 
+    // Leituras rápidas e prontidão
+    bool isReady() const;
+    float peekWeightKgFast();
+
 private:
     float _calibFactor = SCALE_CALIB_DEFAULT;
     float _currentKg   = 0.0f;

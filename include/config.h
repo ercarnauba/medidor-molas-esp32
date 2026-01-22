@@ -65,6 +65,10 @@ constexpr int SCALE_CALIB_WEIGHTS_COUNT = sizeof(SCALE_CALIB_WEIGHTS) / sizeof(S
 // Limiares de detecção de mola
 constexpr float SPRING_CONTACT_FORCE_KG   = 0.30f;  // força para considerar contato com a mola
 constexpr float SPRING_TARA_THRESHOLD_KG  = 0.05f;  // força abaixo da qual considera sem contato
+// Limite de alteração de peso durante homing para acionar alarme
+constexpr float HOMING_WEIGHT_DELTA_KG    = 0.05f;  // variação mínima na balança que caracteriza objeto colocado
+// Intervalo mínimo entre leituras da balança durante homing (ms)
+constexpr unsigned long HOMING_MONITOR_INTERVAL_MS = 10; // reduz jitter do motor
 
 // Comprimento livre da mola (informativo)
 constexpr float SPRING_FREE_LENGTH_MM = 20.0f;
