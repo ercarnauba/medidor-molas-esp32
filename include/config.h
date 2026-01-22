@@ -33,6 +33,15 @@ constexpr int ENC_CLK_PIN = 13;  // GPIO 13 - ✅ Entrada digital (mudado de 18,
 constexpr int ENC_DT_PIN  = 14;  // GPIO 14 - ✅ Entrada digital (mudado de 19, que é MISO do LCD)
 constexpr int ENC_SW_PIN  = 17;  // GPIO 17 - ✅ Entrada digital (mudado de 12, que tem boot conflict MTDI)
 
+// TMC2209 UART e DIAG (pré-configurado, comunicação permanece desabilitada por padrão)
+constexpr int TMC_UART_TX_PIN   = 22;   // GPIO 22 -> TX para TMC2209
+constexpr int TMC_UART_RX_PIN   = 35;   // GPIO 35 <- RX do TMC2209 (input-only)
+constexpr int TMC_DIAG_PIN      = 32;   // GPIO 32 <- DIAG/SG
+constexpr long TMC_UART_BAUD    = 115200;
+constexpr uint8_t TMC_UART_ADDR = 0b00; // endereço UART (CFG1/CFG2 flutuando)
+constexpr uint16_t TMC_DEFAULT_MICROSTEPS = 8; // manter consistente com STEPPER_STEPS_PER_MM
+constexpr bool TMC_UART_ENABLED = false; // deixe false para não abrir a UART; mude para true quando quiser ativar
+
 // ==== RESUMO DE ALOCAÇÃO (Total: 14 pinos) - VERSÃO COM TMC2209 StallGuard ====
 // GPIO 13: ENC_CLK (Encoder Clock) - ✅ Livre
 // GPIO 14: ENC_DT (Encoder Data) - ✅ Livre

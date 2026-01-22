@@ -26,9 +26,14 @@ public:
     bool isReady() const;
     float peekWeightKgFast();
 
+    // Leitura bruta do HX711 (contagens) para depuração
+    long getRawReading();
+    long getRawReadingAbsolute();
+
 private:
     float _calibFactor = SCALE_CALIB_DEFAULT;
     float _currentKg   = 0.0f;
+    long  _lastRaw     = 0;
 };
 
 extern ScaleManager scaleManager;

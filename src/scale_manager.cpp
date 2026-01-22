@@ -31,6 +31,7 @@ void ScaleManager::tare(uint8_t times) {
 void ScaleManager::update() {
     if (scale.is_ready()) {
         _currentKg = scale.get_units(5);  // média de 5 leituras em kg
+        _lastRaw   = scale.read();
     }
 }
 
@@ -120,4 +121,16 @@ float ScaleManager::peekWeightKgFast() {
     long diff = raw - offset;
     float kg = (float)diff / _calibFactor;
     return kg;
+}
+
+long ScaleManager::getRawReading() {
+    if (scale.is_ready()) {
+        _lastRaw = scale.read();
+    }
+    return _lastRaw;
+}
+
+long ScaleManager::getRawReadingAbsolute() {
+    long raw = getRawReading();
+    return (raw >= 0) ? raw : -raw;
 }

@@ -275,87 +275,111 @@ void runHardwareTest() {
     // Limpa a tela e desenha o cabeçalho
     uiManager.clearScreen();
     uiManager.drawText("=== Teste Hardware ===", 10, 5, TFT_YELLOW, 2);
-    uiManager.drawText("Encoder: +/- 1mm", 5, 35, TFT_WHITE, 1);
-    uiManager.drawText("Botao: Sair teste", 5, 50, TFT_WHITE, 1);
-    
+    uiManager.drawText("Zero = pos atual", 5, 25, TFT_WHITE, 1);
+    uiManager.drawText("Encoder: +/- 1mm", 5, 40, TFT_WHITE, 1);
+    uiManager.drawText("Botao: Sair teste", 5, 55, TFT_WHITE, 1);
+
     // Labels fixos na tela
-    uiManager.drawText("Forca:", 5, 80, TFT_CYAN, 2);
-    uiManager.drawText("Posicao:", 5, 110, TFT_GREEN, 2);
-    
+    uiManager.drawText("Forca (g):", 5, 85, TFT_CYAN, 2);
+    uiManager.drawText("HX711 abs:", 5, 115, TFT_CYAN, 2);
+    uiManager.drawText("Cmd Y (mm):", 5, 145, TFT_GREEN, 2);
+    uiManager.drawText("Eixo Y (mm):", 5, 175, TFT_GREEN, 2);
+
     // Instruções no rodapé
-    uiManager.drawText("Click encoder = Sair", 5, 200, TFT_YELLOW, 1);
-    
-    // Posição inicial do motor (pode ser qualquer posição atual)
-    float currentPositionMm = stepperManager.getPositionMm();
-    long lastEncPosRaw = encoderManager.getPosition();
-    
+    uiManager.drawText("Click encoder = Sair", 5, 205, TFT_YELLOW, 1);
+
+    // Considera a posição atual como zero relativo
+    float originMm = stepperManager.getPositionMm();
+    float commandedRelMm = 0.0f;
+    encoderManager.setPosition(0);
+    long lastEncPosRaw = 0;
+
     bool done = false;
     unsigned long lastUpdate = 0;
-    
+
     while (!done) {
         encoderManager.update();
         scaleManager.update();
-        
+
         // Verifica clique do encoder para sair
         if (encoderManager.wasButtonClicked()) {
             done = true;
             break;
         }
-        
+
         // Atualiza display a cada 100ms
         unsigned long now = millis();
         if (now - lastUpdate >= 100) {
             lastUpdate = now;
-            
+
             // Lê a célula de carga em kg e converte para gramas
             float forceKg = scaleManager.getWeightKg();
             float forceG = forceKg * 1000.0f;
-            
+            long hxRawAbs = scaleManager.getRawReadingAbsolute();
+
+            // Posições relativas ao zero definido na entrada do teste
+            float actualRelMm = stepperManager.getPositionMm() - originMm;
+
             // Mostra a força na tela LCD e Serial
             char bufForce[32];
-            snprintf(bufForce, sizeof(bufForce), "%.2f g      ", forceG);
-            uiManager.drawText(bufForce, 110, 80, TFT_CYAN, 2);
-            
+            snprintf(bufForce, sizeof(bufForce), "%.2f g        ", forceG);
+            uiManager.drawText(bufForce, 150, 85, TFT_CYAN, 2);
+
+            char bufRaw[32];
+            snprintf(bufRaw, sizeof(bufRaw), "%ld        ", hxRawAbs);
+            uiManager.drawText(bufRaw, 150, 115, TFT_CYAN, 2);
+
+            char bufCmd[32];
+            snprintf(bufCmd, sizeof(bufCmd), "%+.2f mm        ", commandedRelMm);
+            uiManager.drawText(bufCmd, 150, 145, TFT_GREEN, 2);
+
+            char bufPos[32];
+            snprintf(bufPos, sizeof(bufPos), "%+.2f mm        ", actualRelMm);
+            uiManager.drawText(bufPos, 150, 175, TFT_GREEN, 2);
+
             Serial.print("[HW_TEST] Forca: ");
             Serial.print(forceG, 2);
-            Serial.println(" g");
-            
-            // Mostra a posição atual do motor na tela LCD e Serial
-            float displayPosition = stepperManager.getPositionMm();
-            char bufPos[32];
-            snprintf(bufPos, sizeof(bufPos), "%.2f mm      ", displayPosition);
-            uiManager.drawText(bufPos, 110, 110, TFT_GREEN, 2);
-            
-            Serial.print("[HW_TEST] Posicao: ");
-            Serial.print(displayPosition, 2);
+            Serial.print(" g | HX711 abs: ");
+            Serial.print(hxRawAbs);
+            Serial.print(" | Cmd Y: ");
+            Serial.print(commandedRelMm, 2);
+            Serial.print(" mm | Eixo Y: ");
+            Serial.print(actualRelMm, 2);
             Serial.println(" mm");
         }
-        
+
         // Verifica movimento do encoder
         long encPosRaw = encoderManager.getPosition();
         long deltaEnc = encPosRaw - lastEncPosRaw;
-        
+
         if (deltaEnc != 0) {
             lastEncPosRaw = encPosRaw;
-            
-            // Cada click do encoder = 1mm de movimento
-            // deltaEnc positivo = horário = incrementa posição
-            // deltaEnc negativo = anti-horário = decrementa posição
-            float movementMm = (float)deltaEnc * 1.0f;
-            currentPositionMm += movementMm;
-            
+
+            // Cada click do encoder = 1mm de movimento relativo ao zero deste teste
+            commandedRelMm += (float)deltaEnc;
+            float targetAbsMm = originMm + commandedRelMm;
+
             Serial.print("[HW_TEST] Encoder delta: ");
             Serial.print(deltaEnc);
-            Serial.print(", Movendo motor para: ");
-            Serial.print(currentPositionMm);
-            Serial.println(" mm");
-            
-            // Move o motor para a nova posição
-            stepperManager.moveToPositionMm(currentPositionMm);
+            Serial.print(", Cmd rel: ");
+            Serial.print(commandedRelMm, 2);
+            Serial.print(" mm -> alvo abs: ");
+            Serial.print(targetAbsMm, 2);
+            Serial.println(" mm (130us)");
+
+            // Move o motor para a nova posição com velocidade fixa de 130 us
+            float currentAbsMm = stepperManager.getPositionMm();
+            float deltaMm = targetAbsMm - currentAbsMm;
+            long deltaSteps = (long)round(deltaMm * stepperManager.getStepsPerMm());
+
+            if (deltaSteps != 0) {
+                StepperDirection dir = (deltaSteps > 0) ? STEPPER_DIR_FORWARD : STEPPER_DIR_BACKWARD;
+                stepperManager.moveSteps(labs(deltaSteps), dir, 130);
+            }
         }
-        
+
         delay(50);
     }
-    
+
     Serial.println("[HW_TEST] Teste de hardware finalizado.");
 }
