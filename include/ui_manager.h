@@ -35,6 +35,18 @@ public:
     // yNorm: 0..1 (força)
     // firstPoint: true se for o primeiro ponto da curva
     void plotGraphPoint(float xNorm, float yNorm, bool firstPoint);
+    
+    // Desenha um ponto da curva amarela (K) no gráfico
+    // xNorm: 0..1 (deslocamento)
+    // yNorm: 0..1 (K normalizado)
+    // firstPoint: true se for o primeiro ponto da curva
+    void plotGraphPointYellow(float xNorm, float yNorm, bool firstPoint);
+
+    // Desenha valor de K na lista lateral (incrementalmente)
+    // step: número do passo (0, 1, 2...)
+    // k_kgf_mm: valor da constante elástica em kgf/mm
+    // k_N_mm: valor da constante elástica em N/mm
+    void drawKValueAtStep(int step, float k_kgf_mm, float k_N_mm);
 
     // Limpa a área do gráfico
     void clearGraphArea();
@@ -57,6 +69,9 @@ public:
     // Desenha texto em posição específica
     // size: 1 (pequeno), 2 (médio), 3 (grande)
     void drawText(const char* text, int x, int y, uint16_t color, uint8_t size = 1);
+
+    // Preenche retângulo com cor sólida
+    void fillRect(int x, int y, int w, int h, uint16_t color);
 
     // ---- ALERTAS DE STALLGUARD ----
     // Exibe alerta de travamento mecânico detectado pelo StallGuard

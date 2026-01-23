@@ -23,6 +23,7 @@
 class TestMolaGrafset : public Grafset {
 public:
     enum TestState {
+        STATE_SELECT_COURSE = -2, // Seleção do curso de leitura
         STATE_READY = -1,        // Aguardando confirmação para iniciar
         STATE_INITIAL = 0,
         STATE_HOMING = 10,
@@ -55,6 +56,7 @@ private:
     float lastK_kgf_mm;
     float lastK_N_mm;
     float lastForceKg;
+    float selectedCourseMm;
     
     int compressionStepCounter;
     const int MAX_COMPRESSION_STEPS = 11;  // 0 a 10mm
@@ -92,6 +94,7 @@ private:
     unsigned long awaitSpringEntryTimeMs = 0;
     
     // Métodos internos para cada etapa
+    void executeStateSelectCourse();
     void executeStateReady();
     void executeStateInitial();
     void executeStateHoming();

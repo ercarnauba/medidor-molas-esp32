@@ -1,4 +1,4 @@
-Ôªø#include <Arduino.h>
+#include <Arduino.h>
 
 #include "config.h"
 #include "scale_manager.h"
@@ -26,7 +26,7 @@ static const char* MENU_ITEMS[] = {
 static const int MENU_COUNT = sizeof(MENU_ITEMS) / sizeof(MENU_ITEMS[0]);
 static int menuIndex = 0;
 
-// Para navega√ß√£o do menu
+// Para navegaÁ„o do menu
 static long lastEncPosRaw = 0;
 
 // Grafset para teste de mola
@@ -37,7 +37,7 @@ void runSpringTestWithGraph();
 void runLoadcellCalibration();
 void runHardwareTest();
 
-// Bot√£o frontal removido: retorno ao menu ser√° pelo bot√£o do encoder
+// Bot„o frontal removido: retorno ao menu ser· pelo bot„o do encoder
 
 // ---- SETUP ----
 void setup() {
@@ -51,9 +51,9 @@ void setup() {
     encoderManager.begin();
     uiManager.begin();
 
-    // Motor j√° est√° habilitado ap√≥s stepperManager.begin()
+    // Motor j· est· habilitado apÛs stepperManager.begin()
 
-    // Posi√ß√£o inicial do encoder
+    // PosiÁ„o inicial do encoder
     lastEncPosRaw = encoderManager.getPosition();
 
     // Mostra menu inicial
@@ -78,7 +78,7 @@ void loop() {
 
     switch (appState) {
     case APP_STATE_MENU: {
-        // Navega√ß√£o de menu via encoder
+        // NavegaÁ„o de menu via encoder
         if (deltaEnc > 0) {
             menuIndex++;
             if (menuIndex >= MENU_COUNT) menuIndex = 0;
@@ -89,14 +89,14 @@ void loop() {
             uiManager.drawMenu(MENU_ITEMS, MENU_COUNT, menuIndex);
         }
 
-        // Sele√ß√£o via click - APENAS no menu
+        // SeleÁ„o via click - APENAS no menu
         if (encoderManager.wasButtonClicked()) {
             if (menuIndex == 0) {
                 // Teste da mola com Grafset
                 // Aguarda um momento para evitar que o mesmo clique inicie o teste
                 delay(100);
                 encoderManager.wasButtonClicked(); // Consome qualquer clique residual
-                encoderManager.wasButtonLongPressed(); // Consome long press tamb√©m
+                encoderManager.wasButtonLongPressed(); // Consome long press tambÈm
                 testMolaGrafset.start();
                 appState = APP_STATE_IDLE;
             } else if (menuIndex == 1) {
@@ -129,8 +129,8 @@ void loop() {
     }
 
     case APP_STATE_WAITING_TO_RETURN_MENU: {
-        // Aguarda clique do usu√°rio para retornar ao menu
-        // N√ÉO chamar update() aqui - j√° √© feito no loop principal!
+        // Aguarda clique do usu·rio para retornar ao menu
+        // N√O chamar update() aqui - j· È feito no loop principal!
         
         if (encoderManager.wasButtonClicked()) {
             Serial.println("[MENU] Retornando ao menu...");
@@ -149,14 +149,14 @@ void loop() {
 }
 
 // ========================================================
-//  CALIBRA√á√ÉO DA BALAN√áA (HX711)
+//  CALIBRA«√O DA BALAN«A (HX711)
 // ========================================================
 
 void runLoadcellCalibration() {
     Serial.println("[CALIB] Iniciando calibracao da balanca...");
 
-    // ---- ETAPA 1: SELE√á√ÉO DO PESO ----
-    int weightIndex = 2; // Padr√£o: 2.0 kg (√≠ndice 2)
+    // ---- ETAPA 1: SELE«√O DO PESO ----
+    int weightIndex = 2; // Padr„o: 2.0 kg (Ìndice 2)
     bool weightSelected = false;
     long lastEncPos = encoderManager.getPosition();
 
@@ -165,7 +165,7 @@ void runLoadcellCalibration() {
     while (!weightSelected) {
         encoderManager.update();
 
-        // Navega√ß√£o com encoder
+        // NavegaÁ„o com encoder
         long encPos = encoderManager.getPosition();
         long delta = encPos - lastEncPos;
         if (delta != 0) {
@@ -180,7 +180,7 @@ void runLoadcellCalibration() {
             uiManager.drawWeightSelectionScreen(SCALE_CALIB_WEIGHTS, SCALE_CALIB_WEIGHTS_COUNT, weightIndex);
         }
 
-        // Click confirma sele√ß√£o
+        // Click confirma seleÁ„o
         if (encoderManager.wasButtonClicked()) {
             weightSelected = true;
             Serial.print("[CALIB] Peso selecionado: ");
@@ -199,13 +199,13 @@ void runLoadcellCalibration() {
 
     float selectedWeight = SCALE_CALIB_WEIGHTS[weightIndex];
 
-    // ---- ETAPA 2: CALIBRA√á√ÉO COM O PESO ESCOLHIDO ----
+    // ---- ETAPA 2: CALIBRA«√O COM O PESO ESCOLHIDO ----
     uint8_t stage = 0;
     bool done = false;
 
     while (!done) {
         encoderManager.update();
-        // Atualiza leitura atual s√≥ para mostrar na tela
+        // Atualiza leitura atual sÛ para mostrar na tela
         scaleManager.update();
         float kg = scaleManager.getWeightKg();
 
@@ -224,7 +224,7 @@ void runLoadcellCalibration() {
                 Serial.print(selectedWeight);
                 Serial.println(" kg)...");
 
-                // Media antes, s√≥ por curiosidade
+                // Media antes, sÛ por curiosidade
                 const int N = 10;
                 float soma = 0.0f;
                 for (int i = 0; i < N; ++i) {
@@ -255,7 +255,7 @@ void runLoadcellCalibration() {
             done = true;
         }
 
-        // Encoder: se conclu√≠do (stage 2), clique retorna ao menu
+        // Encoder: se concluÌdo (stage 2), clique retorna ao menu
         if (stage == 2 && encoderManager.wasButtonClicked()) {
             done = true;
         }
@@ -272,23 +272,23 @@ void runLoadcellCalibration() {
 void runHardwareTest() {
     Serial.println("[HW_TEST] Iniciando teste de hardware...");
     
-    // Limpa a tela e desenha o cabe√ßalho
+    // Limpa a tela e desenha o cabeÁalho
     uiManager.clearScreen();
-    uiManager.drawText("=== Teste Hardware ===", 10, 5, TFT_YELLOW, 2);
-    uiManager.drawText("Zero = pos atual", 5, 25, TFT_WHITE, 1);
-    uiManager.drawText("Encoder: +/- 1mm", 5, 40, TFT_WHITE, 1);
-    uiManager.drawText("Botao: Sair teste", 5, 55, TFT_WHITE, 1);
+    uiManager.drawText("=== Teste Hardware ===", 10, 10, TFT_YELLOW, 3);
+    uiManager.drawText("Zero = pos atual", 10, 60, TFT_WHITE, 2);
+    uiManager.drawText("Encoder: +/- 1mm", 10, 85, TFT_WHITE, 2);
+    uiManager.drawText("Botao: Sair teste", 10, 110, TFT_WHITE, 2);
 
     // Labels fixos na tela
-    uiManager.drawText("Forca (g):", 5, 85, TFT_CYAN, 2);
-    uiManager.drawText("HX711 abs:", 5, 115, TFT_CYAN, 2);
-    uiManager.drawText("Cmd Y (mm):", 5, 145, TFT_GREEN, 2);
-    uiManager.drawText("Eixo Y (mm):", 5, 175, TFT_GREEN, 2);
+    uiManager.drawText("Forca (g):", 10, 150, TFT_CYAN, 2);
+    uiManager.drawText("HX711 abs:", 10, 180, TFT_CYAN, 2);
+    uiManager.drawText("Cmd Y (mm):", 10, 210, TFT_GREEN, 2);
+    uiManager.drawText("Eixo Y (mm):", 10, 240, TFT_GREEN, 2);
 
-    // Instru√ß√µes no rodap√©
-    uiManager.drawText("Click encoder = Sair", 5, 205, TFT_YELLOW, 1);
+    // InstruÁıes no rodapÈ
+    uiManager.drawText("Click encoder = Sair", 10, 290, TFT_YELLOW, 2);
 
-    // Considera a posi√ß√£o atual como zero relativo
+    // Considera a posiÁ„o atual como zero relativo
     float originMm = stepperManager.getPositionMm();
     float commandedRelMm = 0.0f;
     encoderManager.setPosition(0);
@@ -312,30 +312,30 @@ void runHardwareTest() {
         if (now - lastUpdate >= 100) {
             lastUpdate = now;
 
-            // L√™ a c√©lula de carga em kg e converte para gramas
+            // LÍ a cÈlula de carga em kg e converte para gramas
             float forceKg = scaleManager.getWeightKg();
             float forceG = forceKg * 1000.0f;
             long hxRawAbs = scaleManager.getRawReadingAbsolute();
 
-            // Posi√ß√µes relativas ao zero definido na entrada do teste
+            // PosiÁıes relativas ao zero definido na entrada do teste
             float actualRelMm = stepperManager.getPositionMm() - originMm;
 
-            // Mostra a for√ßa na tela LCD e Serial
+            // Mostra a forÁa na tela LCD e Serial
             char bufForce[32];
             snprintf(bufForce, sizeof(bufForce), "%.2f g        ", forceG);
-            uiManager.drawText(bufForce, 150, 85, TFT_CYAN, 2);
+            uiManager.drawText(bufForce, 200, 150, TFT_CYAN, 2);
 
             char bufRaw[32];
             snprintf(bufRaw, sizeof(bufRaw), "%ld        ", hxRawAbs);
-            uiManager.drawText(bufRaw, 150, 115, TFT_CYAN, 2);
+            uiManager.drawText(bufRaw, 200, 180, TFT_CYAN, 2);
 
             char bufCmd[32];
             snprintf(bufCmd, sizeof(bufCmd), "%+.2f mm        ", commandedRelMm);
-            uiManager.drawText(bufCmd, 150, 145, TFT_GREEN, 2);
+            uiManager.drawText(bufCmd, 200, 210, TFT_GREEN, 2);
 
             char bufPos[32];
             snprintf(bufPos, sizeof(bufPos), "%+.2f mm        ", actualRelMm);
-            uiManager.drawText(bufPos, 150, 175, TFT_GREEN, 2);
+            uiManager.drawText(bufPos, 200, 240, TFT_GREEN, 2);
 
             Serial.print("[HW_TEST] Forca: ");
             Serial.print(forceG, 2);
@@ -367,7 +367,7 @@ void runHardwareTest() {
             Serial.print(targetAbsMm, 2);
             Serial.println(" mm (130us)");
 
-            // Move o motor para a nova posi√ß√£o com velocidade fixa de 130 us
+            // Move o motor para a nova posiÁ„o com velocidade fixa de 130 us
             float currentAbsMm = stepperManager.getPositionMm();
             float deltaMm = targetAbsMm - currentAbsMm;
             long deltaSteps = (long)round(deltaMm * stepperManager.getStepsPerMm());
@@ -383,3 +383,4 @@ void runHardwareTest() {
 
     Serial.println("[HW_TEST] Teste de hardware finalizado.");
 }
+

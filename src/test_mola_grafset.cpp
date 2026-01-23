@@ -59,8 +59,8 @@ TestMolaGrafset::TestMolaGrafset()
 }
 
 void TestMolaGrafset::start() {
-    Serial.println("[TESTE] Teste de mola selecionado. Aguardando confirmação do usuário...");
-    currentState = STATE_READY;
+    Serial.println("[TESTE] Teste de mola selecionado. Selecionando curso...");
+    currentState = STATE_SELECT_COURSE;
     finished = false;
     
     // Reset de variáveis
@@ -71,6 +71,7 @@ void TestMolaGrafset::start() {
     lastK_N_mm = 0.0f;
     lastForceKg = 0.0f;
     compressionStepCounter = 0;
+    selectedCourseMm = DEFAULT_TEST_COMPRESSION_MM;
     
     // Reset de flags
     screenShownAwaitSpringPlacement = false;
@@ -104,6 +105,9 @@ void TestMolaGrafset::tick() {
     scaleManager.update();
     
     switch (currentState) {
+        case STATE_SELECT_COURSE:
+            executeStateSelectCourse();
+            break;
         case STATE_READY:
             executeStateReady();
             break;
@@ -151,6 +155,107 @@ void TestMolaGrafset::reset() {
     currentState = STATE_INITIAL;
 }
 
+// ============== ETAPA SELEÇÃO DE CURSO ==============
+void TestMolaGrafset::executeStateSelectCourse() {
+    static int courseIndex = 0;  // Índice da opção selecionada
+    static bool screenShown = false;
+    static long lastEncPos = 0;
+    static unsigned long entryTimeMs = 0;
+
+    // Desenha tela uma única vez
+    if (!screenShown) {
+        Serial.println("[TESTE] Selecionando curso de leitura...");
+        
+        uiManager.clearScreen();
+        uiManager.drawText("=== Teste de Mola ===", 50, 20, TFT_YELLOW, 3);
+        uiManager.drawText("Curso de leitura:", 90, 80, TFT_WHITE, 3);
+        
+        // Mostra opções disponíveis
+        for (int i = 0; i < SPRING_TEST_COURSES_COUNT; i++) {
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%.0f mm", SPRING_TEST_COURSES[i]);
+            uint16_t color = (i == courseIndex) ? TFT_CYAN : TFT_WHITE;
+            uiManager.drawText(buf, 180, 140 + i * 50, color, 2);
+            
+            // Desenha símbolo para todos os itens
+            if (i == courseIndex) {
+                uiManager.drawText(">", 150, 140 + i * 50, TFT_CYAN, 2);
+            } else {
+                uiManager.drawText(" ", 150, 140 + i * 50, TFT_BLACK, 2);
+            }
+        }
+        
+        uiManager.drawText("Click = confirmar", 120, 280, TFT_GREEN, 2);
+        uiManager.drawText("Long press = cancelar", 80, 305, TFT_RED, 2);
+        
+        lastEncPos = encoderManager.getPosition();
+        encoderManager.wasButtonClicked();  // Consome cliques pendentes
+        encoderManager.wasButtonLongPressed();
+        
+        screenShown = true;
+        entryTimeMs = millis();
+        return;
+    }
+
+    // Gating: aguarda período após mostrar tela
+    if (millis() - entryTimeMs < 500) {
+        return;
+    }
+
+    // Navegação com encoder
+    long encPos = encoderManager.getPosition();
+    long delta = encPos - lastEncPos;
+    
+    if (delta != 0) {
+        lastEncPos = encPos;
+        
+        if (delta > 0) {
+            courseIndex++;
+            if (courseIndex >= SPRING_TEST_COURSES_COUNT) courseIndex = 0;
+        } else {
+            courseIndex--;
+            if (courseIndex < 0) courseIndex = SPRING_TEST_COURSES_COUNT - 1;
+        }
+        
+        // Redesenha todas as opções e símbolos
+        for (int i = 0; i < SPRING_TEST_COURSES_COUNT; i++) {
+            // Limpa completamente a área do símbolo (20x16 pixels para tamanho 2)
+            uiManager.fillRect(150, 140 + i * 50, 20, 16, TFT_BLACK);
+            
+            // Desenha o texto da opção
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%.0f mm     ", SPRING_TEST_COURSES[i]);
+            uint16_t color = (i == courseIndex) ? TFT_CYAN : TFT_WHITE;
+            uiManager.drawText(buf, 180, 140 + i * 50, color, 2);
+            
+            // Desenha símbolo apenas no item selecionado
+            if (i == courseIndex) {
+                uiManager.drawText(">", 150, 140 + i * 50, TFT_CYAN, 2);
+            }
+        }
+    }
+
+    // Confirma seleção
+    if (encoderManager.wasButtonClicked()) {
+        selectedCourseMm = SPRING_TEST_COURSES[courseIndex];
+        Serial.print("[TESTE] Curso selecionado: ");
+        Serial.print(selectedCourseMm);
+        Serial.println(" mm");
+        
+        screenShown = false;
+        currentState = STATE_READY;
+        return;
+    }
+
+    // Cancela teste
+    if (encoderManager.wasButtonLongPressed()) {
+        Serial.println("[TESTE] Seleção de curso cancelada.");
+        finished = true;
+        screenShown = false;
+        return;
+    }
+}
+
 // ============== ETAPA PRONTO (READY) ==============
 void TestMolaGrafset::executeStateReady() {
     if (!screenShownReady) {
@@ -158,11 +263,15 @@ void TestMolaGrafset::executeStateReady() {
         
         // Desenha tela de confirmação
         uiManager.clearScreen();
-        uiManager.drawText("=== Teste de Mola ===", 10, 40, TFT_YELLOW, 2);
-        uiManager.drawText("", 10, 80, TFT_WHITE, 1);
-        uiManager.drawText("Click para iniciar", 10, 120, TFT_CYAN, 2);
-        uiManager.drawText("", 10, 180, TFT_WHITE, 1);
-        uiManager.drawText("Long press para cancelar", 10, 220, TFT_RED, 1);
+        uiManager.drawText("=== Teste de Mola ===", 50, 40, TFT_YELLOW, 3);
+        
+        char buf[32];
+        snprintf(buf, sizeof(buf), "Curso: %.0f mm", selectedCourseMm);
+        uiManager.drawText(buf, 90, 120, TFT_CYAN, 3);
+        
+        uiManager.drawText("Click para iniciar", 80, 190, TFT_GREEN, 3);
+        uiManager.drawText("", 10, 230, TFT_WHITE, 2);
+        uiManager.drawText("Long press para cancelar", 60, 280, TFT_RED, 2);
         
         // IMPORTANTE: Limpar qualquer click pendente do teste anterior
         // Isso evita que um click "guardado" inicie o novo teste automaticamente
@@ -212,9 +321,9 @@ void TestMolaGrafset::executeStateHoming() {
         
         // Limpa tela e mostra mensagem de homing
         uiManager.clearScreen();
-        uiManager.drawText("=== Homing ===", 10, 80, TFT_CYAN, 2);
-        uiManager.drawText("Buscando HOME...", 10, 130, TFT_YELLOW, 2);
-        uiManager.drawText("Aguarde...", 10, 180, TFT_WHITE, 1);
+        uiManager.drawText("=== Homing ===", 120, 80, TFT_CYAN, 3);
+        uiManager.drawText("Buscando HOME...", 70, 150, TFT_YELLOW, 3);
+        uiManager.drawText("Aguarde...", 170, 220, TFT_WHITE, 2);
         
         // Captura baseline da balança para detectar alterações durante homing
         scaleManager.update();
@@ -257,19 +366,19 @@ void TestMolaGrafset::executeStateHoming() {
                 // ALARME: Alteração de peso detectada durante homing → possível objeto/mola colocada
                 Serial.println("[ALARME] *** ALARME DE HOMING: Objeto detectado durante homing ***");
                 uiManager.clearScreen();
-                uiManager.drawText("=== ALARME ===", 10, 40, TFT_RED, 2);
-                uiManager.drawText("Objeto detectado", 10, 80, TFT_RED, 2);
-                uiManager.drawText("durante HOMING!", 10, 105, TFT_RED, 2);
-                uiManager.drawText("", 10, 140, TFT_WHITE, 1);
-                uiManager.drawText("Remova a mola/objeto", 10, 160, TFT_YELLOW, 1);
-                uiManager.drawText("e confirme para tentar", 10, 175, TFT_YELLOW, 1);
-                uiManager.drawText("novamente.", 10, 190, TFT_YELLOW, 1);
+                uiManager.drawText("=== ALARME ===", 105, 40, TFT_RED, 3);
+                uiManager.drawText("Objeto detectado", 60, 110, TFT_RED, 3);
+                uiManager.drawText("durante HOMING!", 70, 155, TFT_RED, 3);
+                uiManager.drawText("", 10, 200, TFT_WHITE, 2);
+                uiManager.drawText("Remova a mola/objeto", 90, 220, TFT_YELLOW, 2);
+                uiManager.drawText("e confirme para tentar", 80, 245, TFT_YELLOW, 2);
+                uiManager.drawText("novamente.", 165, 270, TFT_YELLOW, 2);
 
                 delay(3000);
             } else {
                 // Falha sem alteração de peso – provável problema mecânico ou switch
                 Serial.println("[DEBUG] Homing falhou SEM alteração significativa de peso.");
-                uiManager.drawTestStatus(0.0f, DEFAULT_TEST_COMPRESSION_MM, 0.0f, 0.0f, false, false);
+                uiManager.drawTestStatus(0.0f, selectedCourseMm, 0.0f, 0.0f, false, false);
                 delay(3000);
             }
             
@@ -313,13 +422,13 @@ void TestMolaGrafset::executeStateAwaitSpringPlacement() {
     if (!screenShownAwaitSpringPlacement) {
         Serial.println("[TESTE] Etapa 4: Aguardando usuario inserir a mola...");
         uiManager.clearScreen();
-        uiManager.drawText("=== Posicionar Mola ===", 10, 10, TFT_YELLOW, 2);
-        uiManager.drawText("Motor em 30 mm", 10, 50, TFT_WHITE, 1);
-        uiManager.drawText("Coloque a mola", 10, 70, TFT_WHITE, 1);
-        uiManager.drawText("entre as plataformas", 10, 85, TFT_WHITE, 1);
-        uiManager.drawText("", 10, 110, TFT_WHITE, 1);
-        uiManager.drawText("Click encoder", 10, 130, TFT_CYAN, 2);
-        uiManager.drawText("para confirmar", 10, 150, TFT_CYAN, 2);
+        uiManager.drawText("=== Posicionar Mola ===", 15, 30, TFT_YELLOW, 3);
+        uiManager.drawText("Motor em 30 mm", 130, 100, TFT_WHITE, 2);
+        uiManager.drawText("Coloque a mola", 130, 130, TFT_WHITE, 2);
+        uiManager.drawText("entre as plataformas", 85, 155, TFT_WHITE, 2);
+        uiManager.drawText("", 10, 190, TFT_WHITE, 2);
+        uiManager.drawText("Click encoder", 100, 220, TFT_CYAN, 3);
+        uiManager.drawText("para confirmar", 90, 265, TFT_CYAN, 3);
         
         userInteractionTimeout = millis() + 120000;  // 2 minutos
         screenShownAwaitSpringPlacement = true;
@@ -382,9 +491,9 @@ void TestMolaGrafset::executeStateFindSpringContact() {
         
         // Limpa tela e mostra mensagem de busca
         uiManager.clearScreen();
-        uiManager.drawText("=== Busca Mola ===", 10, 80, TFT_CYAN, 2);
-        uiManager.drawText("Procurando...", 10, 130, TFT_YELLOW, 2);
-        uiManager.drawText("Aguarde...", 10, 180, TFT_WHITE, 1);
+        uiManager.drawText("=== Busca Mola ===", 75, 80, TFT_CYAN, 3);
+        uiManager.drawText("Procurando...", 105, 150, TFT_YELLOW, 3);
+        uiManager.drawText("Aguarde...", 170, 220, TFT_WHITE, 2);
         
         screenShownFindSpringContact = true;
     }
@@ -433,15 +542,15 @@ void TestMolaGrafset::executeStateFindSpringContact() {
         
         // Exibir alarme no TFT
         uiManager.clearScreen();
-        uiManager.drawText("=== ALARME ===", 10, 40, TFT_RED, 2);
-        uiManager.drawText("", 10, 80, TFT_WHITE, 1);
-        uiManager.drawText("Mola NAO DETECTADA!", 10, 100, TFT_RED, 2);
-        uiManager.drawText("", 10, 140, TFT_WHITE, 1);
-        uiManager.drawText("Verificar:", 10, 160, TFT_YELLOW, 1);
-        uiManager.drawText("- Mola posicionada?", 10, 175, TFT_YELLOW, 1);
-        uiManager.drawText("- Balanca calibrada?", 10, 190, TFT_YELLOW, 1);
-        uiManager.drawText("", 10, 220, TFT_WHITE, 1);
-        uiManager.drawText("Click para tentar novamente", 10, 240, TFT_CYAN, 1);
+        uiManager.drawText("=== ALARME ===", 105, 40, TFT_RED, 3);
+        uiManager.drawText("", 10, 100, TFT_WHITE, 2);
+        uiManager.drawText("Mola NAO DETECTADA!", 30, 120, TFT_RED, 3);
+        uiManager.drawText("", 10, 200, TFT_WHITE, 2);
+        uiManager.drawText("Verificar:", 170, 200, TFT_YELLOW, 2);
+        uiManager.drawText("- Mola posicionada?", 100, 225, TFT_YELLOW, 2);
+        uiManager.drawText("- Balanca calibrada?", 90, 250, TFT_YELLOW, 2);
+        uiManager.drawText("", 10, 280, TFT_WHITE, 2);
+        uiManager.drawText("Click para tentar novamente", 45, 295, TFT_CYAN, 2);
         
         Serial.println("[TESTE] Aguardando confirmação para tentar novamente...");
         userInteractionTimeout = millis() + 60000;  // 1 minuto
@@ -544,14 +653,14 @@ void TestMolaGrafset::executeStateCompressionSampling() {
     if (!screenShownCompressionSampling) {
         Serial.println("[TESTE] Etapa 9: Iniciando amostragem de compressão (10mm)...");
         uiManager.clearScreen();
-        uiManager.drawTestStatus(0.0f, DEFAULT_TEST_COMPRESSION_MM, 0.0f, 0.0f, true, false);
+        uiManager.drawTestStatus(0.0f, selectedCourseMm, 0.0f, 0.0f, true, false);
         uiManager.clearGraphArea();
         
         compressionStepCounter = 0;
         screenShownCompressionSampling = true;
     }
     
-    if (compressionStepCounter <= 10) {
+    if (compressionStepCounter <= (int)selectedCourseMm) {
         // Check cancellation
         if (encoderManager.wasButtonLongPressed()) {
             Serial.println("[TESTE] Cancelado durante amostragem.");
@@ -563,7 +672,7 @@ void TestMolaGrafset::executeStateCompressionSampling() {
         float moldCompressionReadingMm = (float)compressionStepCounter;
         float motorRealTargetMm = springContactMotorPosRealMm - moldCompressionReadingMm;
         
-        float maxMotorCompressionRealMm = springContactMotorPosRealMm - DEFAULT_TEST_COMPRESSION_MM;
+        float maxMotorCompressionRealMm = springContactMotorPosRealMm - selectedCourseMm;
         if (motorRealTargetMm < maxMotorCompressionRealMm) {
             motorRealTargetMm = maxMotorCompressionRealMm;
             moldCompressionReadingMm = springContactMotorPosRealMm - motorRealTargetMm;
@@ -616,11 +725,20 @@ void TestMolaGrafset::executeStateCompressionSampling() {
                                  true,
                                  false);
         
-        float xNorm = moldCompressionReadingMm / DEFAULT_TEST_COMPRESSION_MM;
+        float xNorm = moldCompressionReadingMm / selectedCourseMm;
         float yNorm = avgKg / GRAPH_MAX_FORCE_KG;
         if (yNorm > 1.0f) yNorm = 1.0f;
         
         uiManager.plotGraphPoint(xNorm, yNorm, (compressionStepCounter == 0));
+        
+            // Plota curva amarela (K em N/mm)
+            float kNorm = lastK_N_mm / 20.0f;  // Normaliza assumindo K máximo ~20 N/mm
+            uiManager.plotGraphPointYellow(xNorm, kNorm, (compressionStepCounter == 0));
+        
+        // Desenha valor de K na lista lateral
+        if (compressionStepCounter > 0) {  // Pula o passo 0 (sem compressão)
+            uiManager.drawKValueAtStep(compressionStepCounter, lastK_kgf_mm, lastK_N_mm);
+        }
         
         compressionStepCounter++;
     } else {
@@ -635,7 +753,7 @@ void TestMolaGrafset::executeStateReturnInitial() {
     if (!screenShownReturnInitial) {
         Serial.println("[TESTE] Etapa 10: Retornando motor para 30mm...");
         uiManager.drawTestStatus(lastForceKg,
-                                 DEFAULT_TEST_COMPRESSION_MM,
+                                 selectedCourseMm,
                                  lastK_kgf_mm,
                                  lastK_N_mm,
                                  false,
@@ -659,36 +777,63 @@ void TestMolaGrafset::executeStateShowResults() {
     if (!screenShownShowResults) {
         Serial.println("[TESTE] Etapa 11: Teste concluido. Aguardando confirmação do usuário...");
         
-        uiManager.drawText(">>> Retire a mola <<<", 20, 180, TFT_YELLOW, 1);
-        uiManager.drawText("Click para continuar", 20, 200, TFT_CYAN, 1);
+        const char* removeMsg = ">>> Retire a mola <<<";
+        int removeMsgWidth = (int)strlen(removeMsg) * 6 * 2;  // fonte size=2, 6px base
+        int removeMsgX = 320 - removeMsgWidth;
+        if (removeMsgX < 0) removeMsgX = 0;
+
+        uiManager.drawText(removeMsg, removeMsgX, 285, TFT_WHITE, 2);
+        uiManager.drawText("Click para continuar", 0, 305, TFT_CYAN, 2);
         
         userInteractionTimeout = millis() + 60000;  // 1 minuto
         screenShownShowResults = true;
     }
     
+    // Pisca a mensagem "Retire a mola"
+    static unsigned long lastBlinkToggle = 0;
+    static bool blinkOn = true;
+    static int cachedMsgX = -1;
+    static int cachedMsgW = 0;
+    if (cachedMsgX < 0) {
+        const char* removeMsg = ">>> Retire a mola <<<";
+        cachedMsgW = (int)strlen(removeMsg) * 6 * 2;
+        cachedMsgX = 320 - cachedMsgW;
+        if (cachedMsgX < 0) cachedMsgX = 0;
+    }
+    if (millis() - lastBlinkToggle > 500) {
+        lastBlinkToggle = millis();
+        blinkOn = !blinkOn;
+        if (blinkOn) {
+            uiManager.drawText(">>> Retire a mola <<<", cachedMsgX, 285, TFT_WHITE, 2);
+        } else {
+            // Limpa a área onde o texto aparece
+            uiManager.fillRect(cachedMsgX, 282, cachedMsgW + 4, 28, TFT_BLACK);
+        }
+    }
+
     if (encoderManager.wasButtonClicked()) {
         Serial.println("[TESTE] Usuário confirmou.");
         userConfirmedRemoval = true;
         
         // Exibe resumo final
         uiManager.clearScreen();
-        uiManager.drawText("=== Teste Concluido ===", 10, 10, TFT_GREEN, 2);
-        uiManager.drawText("", 10, 40, TFT_WHITE, 1);
+        uiManager.drawText("=== Teste Concluido ===", 20, 30, TFT_GREEN, 3);
+        uiManager.drawText("", 10, 80, TFT_WHITE, 2);
         
         char kDisplay[64];
         snprintf(kDisplay, sizeof(kDisplay), "K: %.3f kgf/mm", lastK_kgf_mm);
-        uiManager.drawText(kDisplay, 10, 60, TFT_CYAN, 2);
+        uiManager.drawText(kDisplay, 60, 110, TFT_CYAN, 3);
         
         char kNewtons[64];
         snprintf(kNewtons, sizeof(kNewtons), "K: %.3f N/mm", lastK_N_mm);
-        uiManager.drawText(kNewtons, 10, 85, TFT_CYAN, 1);
+        uiManager.drawText(kNewtons, 100, 160, TFT_CYAN, 2);
         
         char forceDisplay[64];
         snprintf(forceDisplay, sizeof(forceDisplay), "Forca max: %.2f kg", lastForceKg);
-        uiManager.drawText(forceDisplay, 10, 110, TFT_WHITE, 1);
+        uiManager.drawText(forceDisplay, 90, 200, TFT_WHITE, 2);
         
-        uiManager.drawText("", 10, 140, TFT_WHITE, 1);
-        uiManager.drawText("Click encoder para menu", 10, 160, TFT_YELLOW, 1);
+        uiManager.drawText("", 10, 200, TFT_WHITE, 2);
+        uiManager.drawText("Click no botao para menu", 150, 285, TFT_YELLOW, 2);
         
         Serial.println("[TESTE] Teste de mola concluido com sucesso!");
         Serial.print("Ponto de contato (Motor REAL): ");
@@ -714,3 +859,19 @@ void TestMolaGrafset::executeStateShowResults() {
 bool TestMolaGrafset::checkUserInteractionTimeout(unsigned long timeout) {
     return millis() > timeout;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

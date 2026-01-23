@@ -119,6 +119,10 @@ constexpr uint16_t TMC_STALL_MIN_SPEED_US = 1500; // microsteps delay (mais lent
 
 // ==== TESTE PADRÃO DE MOLA ====
 
+// Opções de curso de leitura para teste de mola
+constexpr float SPRING_TEST_COURSES[] = {10.0f, 8.0f, 5.0f};
+constexpr int SPRING_TEST_COURSES_COUNT = sizeof(SPRING_TEST_COURSES) / sizeof(SPRING_TEST_COURSES[0]);
+
 // Compressão padrão usada no teste (pode ajustar depois)
 constexpr float DEFAULT_TEST_COMPRESSION_MM = 10.0f;
 
