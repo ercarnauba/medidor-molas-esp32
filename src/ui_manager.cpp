@@ -314,6 +314,27 @@ void UiManager::drawText(const char* text, int x, int y, uint16_t color, uint8_t
     tft.print(text);
 }
 
+void UiManager::drawCenteredText(const char* text, uint16_t color, uint8_t size) {
+    if (size < 1) size = 1;
+    // Largura/altura por caractere para fonte padrão do TFT_eSPI
+    int charW = 6 * (int)size;
+    int charH = 8 * (int)size;
+    int len = (int)strlen(text);
+    int textW = charW * len;
+    int textH = charH;
+    // Dimensões da tela com rotation=1 (480x320)
+    const int screenW = 480;
+    const int screenH = 320;
+    int x = (screenW - textW) / 2;
+    int y = (screenH - textH) / 2;
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+    tft.setTextSize(size);
+    tft.setTextColor(color, TFT_BLACK);
+    tft.setCursor(x, y);
+    tft.print(text);
+}
+
 // Adiciona ponto amarelo no gráfico (K em N/mm)
 void UiManager::plotGraphPointYellow(float xNorm, float yNorm, bool firstPoint) {
     if (xNorm < 0.0f) xNorm = 0.0f;
@@ -371,8 +392,6 @@ void UiManager::showStallAlert() {
     
     _stallAlertVisible = true;
     _stallAlertTime = millis();
-    
-    Serial.println("[UI] Stall alert displayed on LCD");
 }
 
 void UiManager::clearStallAlert() {
@@ -381,8 +400,6 @@ void UiManager::clearStallAlert() {
         // Por simplicidade, redesenha toda a tela
         clearScreen();
         _stallAlertVisible = false;
-        
-        Serial.println("[UI] Stall alert cleared");
     }
 }
 

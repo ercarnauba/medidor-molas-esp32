@@ -51,7 +51,6 @@ float ScaleManager::getCalibFactor() const {
 
 void ScaleManager::calibrateWithKnownWeight(float knownKg) {
     if (knownKg <= 0.0f) {
-        Serial.println("[SCALE] ERROR: Invalid weight for calibration (must be > 0).");
         return;
     }
 
@@ -62,7 +61,6 @@ void ScaleManager::calibrateWithKnownWeight(float knownKg) {
     long diff   = raw - offset;
 
     if (diff == 0) {
-        Serial.println("[SCALE] ERROR: Scale not responding or no weight detected.");
         return;
     }
 
@@ -70,11 +68,7 @@ void ScaleManager::calibrateWithKnownWeight(float knownKg) {
     if (newCalib > 0.0f && newCalib < 1000000.0f) {
         _calibFactor = newCalib;
         scale.set_scale(_calibFactor);
-        Serial.print("[SCALE] Calibration successful: ");
-        Serial.println(_calibFactor, 4);
     } else {
-        Serial.print("[SCALE] ERROR: Calculated calibration factor out of range: ");
-        Serial.println(newCalib);
     }
 }
 
@@ -96,13 +90,7 @@ void ScaleManager::saveCalibrationToEEPROM() {
 #ifdef ESP32
     EEPROM.put(EEPROM_ADDR_MAGIC, EEPROM_MAGIC);
     EEPROM.put(EEPROM_ADDR_CALIB, _calibFactor);
-    if (EEPROM.commit()) {
-        Serial.println("[SCALE] Calibration saved to EEPROM successfully.");
-    } else {
-        Serial.println("[SCALE] ERROR: Failed to commit EEPROM!");
-    }
-#else
-    Serial.println("[SCALE] WARNING: EEPROM not available on this platform.");
+    EEPROM.commit();
 #endif
 }
 

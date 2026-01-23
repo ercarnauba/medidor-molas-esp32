@@ -26,7 +26,7 @@ static const char* MENU_ITEMS[] = {
 static const int MENU_COUNT = sizeof(MENU_ITEMS) / sizeof(MENU_ITEMS[0]);
 static int menuIndex = 0;
 
-// Para navegação do menu
+// Para navegaï¿½ï¿½o do menu
 static long lastEncPosRaw = 0;
 
 // Grafset para teste de mola
@@ -37,7 +37,7 @@ void runSpringTestWithGraph();
 void runLoadcellCalibration();
 void runHardwareTest();
 
-// Botão frontal removido: retorno ao menu será pelo botão do encoder
+// Botï¿½o frontal removido: retorno ao menu serï¿½ pelo botï¿½o do encoder
 
 // ---- SETUP ----
 void setup() {
@@ -51,9 +51,13 @@ void setup() {
     encoderManager.begin();
     uiManager.begin();
 
-    // Motor já está habilitado após stepperManager.begin()
+    // Motor jï¿½ estï¿½ habilitado apï¿½s stepperManager.begin()
+        // Splash screen inicial (5s)
+        uiManager.clearScreen();
+        uiManager.drawCenteredText("CARNAUBA TECH", TFT_YELLOW, 6);
+        delay(5000);
 
-    // Posição inicial do encoder
+    // Posiï¿½ï¿½o inicial do encoder
     lastEncPosRaw = encoderManager.getPosition();
 
     // Mostra menu inicial
@@ -78,7 +82,7 @@ void loop() {
 
     switch (appState) {
     case APP_STATE_MENU: {
-        // Navegação de menu via encoder
+        // Navegaï¿½ï¿½o de menu via encoder
         if (deltaEnc > 0) {
             menuIndex++;
             if (menuIndex >= MENU_COUNT) menuIndex = 0;
@@ -89,14 +93,14 @@ void loop() {
             uiManager.drawMenu(MENU_ITEMS, MENU_COUNT, menuIndex);
         }
 
-        // Seleção via click - APENAS no menu
+        // Seleï¿½ï¿½o via click - APENAS no menu
         if (encoderManager.wasButtonClicked()) {
             if (menuIndex == 0) {
                 // Teste da mola com Grafset
                 // Aguarda um momento para evitar que o mesmo clique inicie o teste
                 delay(100);
                 encoderManager.wasButtonClicked(); // Consome qualquer clique residual
-                encoderManager.wasButtonLongPressed(); // Consome long press também
+                encoderManager.wasButtonLongPressed(); // Consome long press tambï¿½m
                 testMolaGrafset.start();
                 appState = APP_STATE_IDLE;
             } else if (menuIndex == 1) {
@@ -129,11 +133,10 @@ void loop() {
     }
 
     case APP_STATE_WAITING_TO_RETURN_MENU: {
-        // Aguarda clique do usuário para retornar ao menu
-        // NÃO chamar update() aqui - já é feito no loop principal!
+        // Aguarda clique do usuï¿½rio para retornar ao menu
+        // Nï¿½O chamar update() aqui - jï¿½ ï¿½ feito no loop principal!
         
         if (encoderManager.wasButtonClicked()) {
-            Serial.println("[MENU] Retornando ao menu...");
             testMolaGrafset.reset();
             appState = APP_STATE_MENU;
             menuIndex = 0;
@@ -149,14 +152,13 @@ void loop() {
 }
 
 // ========================================================
-//  CALIBRAÇÃO DA BALANÇA (HX711)
+//  CALIBRAï¿½ï¿½O DA BALANï¿½A (HX711)
 // ========================================================
 
 void runLoadcellCalibration() {
-    Serial.println("[CALIB] Iniciando calibracao da balanca...");
 
-    // ---- ETAPA 1: SELEÇÃO DO PESO ----
-    int weightIndex = 2; // Padrão: 2.0 kg (índice 2)
+    // ---- ETAPA 1: SELEï¿½ï¿½O DO PESO ----
+    int weightIndex = 2; // Padrï¿½o: 2.0 kg (ï¿½ndice 2)
     bool weightSelected = false;
     long lastEncPos = encoderManager.getPosition();
 
@@ -165,7 +167,7 @@ void runLoadcellCalibration() {
     while (!weightSelected) {
         encoderManager.update();
 
-        // Navegação com encoder
+        // Navegaï¿½ï¿½o com encoder
         long encPos = encoderManager.getPosition();
         long delta = encPos - lastEncPos;
         if (delta != 0) {
@@ -180,17 +182,14 @@ void runLoadcellCalibration() {
             uiManager.drawWeightSelectionScreen(SCALE_CALIB_WEIGHTS, SCALE_CALIB_WEIGHTS_COUNT, weightIndex);
         }
 
-        // Click confirma seleção
+        // Click confirma seleï¿½ï¿½o
         if (encoderManager.wasButtonClicked()) {
             weightSelected = true;
-            Serial.print("[CALIB] Peso selecionado: ");
-            Serial.print(SCALE_CALIB_WEIGHTS[weightIndex]);
-            Serial.println(" kg");
+
         }
 
         // Long press cancela
         if (encoderManager.wasButtonLongPressed()) {
-            Serial.println("[CALIB] Cancelado pelo usuario.");
             return;
         }
 
@@ -199,13 +198,13 @@ void runLoadcellCalibration() {
 
     float selectedWeight = SCALE_CALIB_WEIGHTS[weightIndex];
 
-    // ---- ETAPA 2: CALIBRAÇÃO COM O PESO ESCOLHIDO ----
+    // ---- ETAPA 2: CALIBRAï¿½ï¿½O COM O PESO ESCOLHIDO ----
     uint8_t stage = 0;
     bool done = false;
 
     while (!done) {
         encoderManager.update();
-        // Atualiza leitura atual só para mostrar na tela
+        // Atualiza leitura atual sï¿½ para mostrar na tela
         scaleManager.update();
         float kg = scaleManager.getWeightKg();
 
@@ -215,16 +214,12 @@ void runLoadcellCalibration() {
         if (encoderManager.wasButtonClicked()) {
             if (stage == 0) {
                 // Fazer tara sem peso
-                Serial.println("[CALIB] TARA sem peso...");
                 scaleManager.tare();
                 stage = 1;
             } else if (stage == 1) {
                 // Peso de referencia
-                Serial.print("[CALIB] Lendo peso referencia (");
-                Serial.print(selectedWeight);
-                Serial.println(" kg)...");
 
-                // Media antes, só por curiosidade
+                // Media antes, sï¿½ por curiosidade
                 const int N = 10;
                 float soma = 0.0f;
                 for (int i = 0; i < N; ++i) {
@@ -233,16 +228,8 @@ void runLoadcellCalibration() {
                     delay(50);
                 }
                 float antesKg = soma / (float)N;
-                Serial.print("[CALIB] Antes calib: ");
-                Serial.print(antesKg, 3);
-                Serial.println(" kg");
-
                 scaleManager.calibrateWithKnownWeight(selectedWeight);
                 scaleManager.saveCalibrationToEEPROM();
-
-                Serial.print("[CALIB] Novo fator: ");
-                Serial.println(scaleManager.getCalibFactor(), 4);
-                Serial.println("[CALIB] Concluido.");
 
                 stage = 2;
             } else {
@@ -255,24 +242,22 @@ void runLoadcellCalibration() {
             done = true;
         }
 
-        // Encoder: se concluído (stage 2), clique retorna ao menu
+        // Encoder: se concluï¿½do (stage 2), clique retorna ao menu
         if (stage == 2 && encoderManager.wasButtonClicked()) {
             done = true;
         }
 
         delay(50);
     }
-
-    Serial.println("[CALIB] Saindo da calibracao, voltando ao menu.");
 }
 
 // ============================
 // runHardwareTest
-// ============================
+// =============================
 void runHardwareTest() {
-    Serial.println("[HW_TEST] Iniciando teste de hardware...");
+    // Teste de hardware
     
-    // Limpa a tela e desenha o cabeçalho
+    // Limpa a tela e desenha o cabeï¿½alho
     uiManager.clearScreen();
     uiManager.drawText("=== Teste Hardware ===", 10, 10, TFT_YELLOW, 3);
     uiManager.drawText("Zero = pos atual", 10, 60, TFT_WHITE, 2);
@@ -285,10 +270,10 @@ void runHardwareTest() {
     uiManager.drawText("Cmd Y (mm):", 10, 210, TFT_GREEN, 2);
     uiManager.drawText("Eixo Y (mm):", 10, 240, TFT_GREEN, 2);
 
-    // Instruções no rodapé
+    // Instruï¿½ï¿½es no rodapï¿½
     uiManager.drawText("Click encoder = Sair", 10, 290, TFT_YELLOW, 2);
 
-    // Considera a posição atual como zero relativo
+    // Considera a posiï¿½ï¿½o atual como zero relativo
     float originMm = stepperManager.getPositionMm();
     float commandedRelMm = 0.0f;
     encoderManager.setPosition(0);
@@ -312,15 +297,15 @@ void runHardwareTest() {
         if (now - lastUpdate >= 100) {
             lastUpdate = now;
 
-            // Lê a célula de carga em kg e converte para gramas
+            // Lï¿½ a cï¿½lula de carga em kg e converte para gramas
             float forceKg = scaleManager.getWeightKg();
             float forceG = forceKg * 1000.0f;
             long hxRawAbs = scaleManager.getRawReadingAbsolute();
 
-            // Posições relativas ao zero definido na entrada do teste
+            // Posiï¿½ï¿½es relativas ao zero definido na entrada do teste
             float actualRelMm = stepperManager.getPositionMm() - originMm;
 
-            // Mostra a força na tela LCD e Serial
+            // Mostra a forï¿½a na tela LCD e Serial
             char bufForce[32];
             snprintf(bufForce, sizeof(bufForce), "%.2f g        ", forceG);
             uiManager.drawText(bufForce, 200, 150, TFT_CYAN, 2);
@@ -336,16 +321,6 @@ void runHardwareTest() {
             char bufPos[32];
             snprintf(bufPos, sizeof(bufPos), "%+.2f mm        ", actualRelMm);
             uiManager.drawText(bufPos, 200, 240, TFT_GREEN, 2);
-
-            Serial.print("[HW_TEST] Forca: ");
-            Serial.print(forceG, 2);
-            Serial.print(" g | HX711 abs: ");
-            Serial.print(hxRawAbs);
-            Serial.print(" | Cmd Y: ");
-            Serial.print(commandedRelMm, 2);
-            Serial.print(" mm | Eixo Y: ");
-            Serial.print(actualRelMm, 2);
-            Serial.println(" mm");
         }
 
         // Verifica movimento do encoder
@@ -359,15 +334,8 @@ void runHardwareTest() {
             commandedRelMm += (float)deltaEnc;
             float targetAbsMm = originMm + commandedRelMm;
 
-            Serial.print("[HW_TEST] Encoder delta: ");
-            Serial.print(deltaEnc);
-            Serial.print(", Cmd rel: ");
-            Serial.print(commandedRelMm, 2);
-            Serial.print(" mm -> alvo abs: ");
-            Serial.print(targetAbsMm, 2);
-            Serial.println(" mm (130us)");
 
-            // Move o motor para a nova posição com velocidade fixa de 130 us
+            // Move o motor para a nova posiï¿½ï¿½o com velocidade fixa de 130 us
             float currentAbsMm = stepperManager.getPositionMm();
             float deltaMm = targetAbsMm - currentAbsMm;
             long deltaSteps = (long)round(deltaMm * stepperManager.getStepsPerMm());
@@ -380,7 +348,5 @@ void runHardwareTest() {
 
         delay(50);
     }
-
-    Serial.println("[HW_TEST] Teste de hardware finalizado.");
 }
 

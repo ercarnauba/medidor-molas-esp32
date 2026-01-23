@@ -23,8 +23,11 @@ public:
 private:
     volatile long _position      = 0;
     volatile int  _lastStateCLK  = HIGH;
+    volatile unsigned long _lastEncoderTime = 0;  // Debounce encoder
+    volatile unsigned long _lastButtonISRTime = 0;  // Debounce botão na ISR
     volatile bool _buttonClicked = false;
     volatile bool _buttonLongPressed = false;
+    volatile bool _buttonPending = false;  // Flag para prevenir acionamentos múltiplos
     unsigned long _lastClickMillis = 0;
     unsigned long _pressStartMillis = 0;
     unsigned long _lastButtonChange = 0;

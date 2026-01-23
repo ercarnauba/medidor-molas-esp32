@@ -71,6 +71,7 @@ void TestMolaGrafset::start() {
     lastK_N_mm = 0.0f;
     lastForceKg = 0.0f;
     compressionStepCounter = 0;
+    sampleCount = 0;  // Reinicia buffer de amostras para novo teste
     selectedCourseMm = DEFAULT_TEST_COMPRESSION_MM;
     
     // Reset de flags
@@ -317,8 +318,6 @@ void TestMolaGrafset::executeStateInitial() {
 void TestMolaGrafset::executeStateHoming() {
     // Executa homing apenas uma vez
     if (!homingExecuted) {
-        Serial.println("[DEBUG] Iniciando sequência de homing...");
-        
         // Limpa tela e mostra mensagem de homing
         uiManager.clearScreen();
         uiManager.drawText("=== Homing ===", 120, 80, TFT_CYAN, 3);
@@ -329,38 +328,25 @@ void TestMolaGrafset::executeStateHoming() {
         scaleManager.update();
         homingBaselineKg = scaleManager.getWeightKg();
         g_homingBaselineKg = homingBaselineKg;
-        Serial.print("[DEBUG] Baseline da balança (kg): ");
-        Serial.println(homingBaselineKg, 3);
 
         // IMPORTANTE: Usar limite MUITO grande (250mm = 400000 passos a 1600 spm)
         // O motor será parado APENAS pelo micro switch, não por limite de movimento
         long maxSteps = (long)(250.0f * stepperManager.getStepsPerMm());
-        Serial.print("[DEBUG] maxSteps calculado: ");
-        Serial.println(maxSteps);
         
         // Homing com monitoramento de alteração de peso na balança
         stepperManager.homeToEndstopWithMonitor(maxSteps, 133, homingWeightMonitor, this);
         homingExecuted = true;
         
-        Serial.println("[DEBUG] homeToEndstop() retornou, aguardando estabilização...");
         delay(200);  // Aguardar estabilização
         
         bool homingSuccess = stepperManager.wasLastHomingSuccessful();
-        Serial.print("[DEBUG] wasLastHomingSuccessful() retornou: ");
-        Serial.println(homingSuccess ? "true (SUCESSO)" : "false (FALHOU)");
         
         if (!homingSuccess) {
-            Serial.println("[DEBUG] Homing falhou/abortado. Verificando alteração de peso na balança...");
             delay(100);
             scaleManager.update();
             float currentWeight = scaleManager.getWeightKg();
             float delta = currentWeight - homingBaselineKg;
             if (delta < 0.0f) delta = -delta;
-            Serial.print("[DEBUG] Peso atual: ");
-            Serial.print(currentWeight);
-            Serial.print(" Kg, delta vs baseline: ");
-            Serial.print(delta);
-            Serial.println(" Kg");
 
             if (delta >= HOMING_WEIGHT_DELTA_KG || currentWeight >= SPRING_CONTACT_FORCE_KG) {
                 // ALARME: Alteração de peso detectada durante homing → possível objeto/mola colocada
@@ -377,7 +363,6 @@ void TestMolaGrafset::executeStateHoming() {
                 delay(3000);
             } else {
                 // Falha sem alteração de peso – provável problema mecânico ou switch
-                Serial.println("[DEBUG] Homing falhou SEM alteração significativa de peso.");
                 uiManager.drawTestStatus(0.0f, selectedCourseMm, 0.0f, 0.0f, false, false);
                 delay(3000);
             }
@@ -386,8 +371,6 @@ void TestMolaGrafset::executeStateHoming() {
             homingExecuted = false;
             return;
         }
-        
-        Serial.println("[DEBUG] Homing com sucesso, continuando teste...");
         
         motorRealPositionMm = stepperManager.getPositionMm();
         Serial.print("[TESTE] Etapa 2: HOME = 0mm definido. Posição REAL atual: ");
@@ -501,24 +484,58 @@ void TestMolaGrafset::executeStateFindSpringContact() {
     static int chunkSteps = 0;
     static float maxMotorSearchPosRealMm = 5.0f;
     static bool searchStarted = false;
+    static bool continuousMovementDone = false;
     
     if (!searchStarted) {
         chunkSteps = (int)(0.25f * stepperManager.getStepsPerMm());
         if (chunkSteps < 1) chunkSteps = 1;
         searchStarted = true;
+        continuousMovementDone = false;
+        
+        // Fase 1: Movimento contínuo de 10mm (uma única vez)
+        long continuousSteps = (int)(10.0f * stepperManager.getStepsPerMm());  // 10mm contínuo
+        stepperManager.moveSteps(continuousSteps, STEPPER_DIR_BACKWARD, 130);  // 130us (mais seguro)
+        motorRealPositionMm = stepperManager.getPositionMm();
+        
+        Serial.print("[TESTE] Movimento contínuo de 10mm concluído. Posição: ");
+        Serial.print(motorRealPositionMm, 1);
+        Serial.println(" mm");
+        
+        // Verifica se mola foi detectada durante o movimento contínuo
+        float currentForceKg = scaleManager.getWeightKg();
+        if (currentForceKg >= SPRING_CONTACT_FORCE_KG) {
+            springContactDetected = true;
+            springContactMotorPosRealMm = motorRealPositionMm;
+            Serial.print("[TESTE] MOLA DETECTADA (durante contínuo)! Forca: ");
+            Serial.print(currentForceKg, 3);
+            Serial.print(" kg em posicao: ");
+            Serial.print(springContactMotorPosRealMm, 1);
+            Serial.println(" mm");
+            
+            currentState = STATE_RETURN_TO_TARE;
+            searchStarted = false;
+            screenShownFindSpringContact = false;
+            continuousMovementDone = false;
+            return;
+        }
+        
+        continuousMovementDone = true;
     }
     
     if (motorRealPositionMm > maxMotorSearchPosRealMm) {
+        // Fase 2: Movimento em pulsos (após 10mm contínuos)
+        
         // Check for user cancellation
         if (encoderManager.wasButtonLongPressed()) {
             Serial.println("[TESTE] Cancelado pelo usuario durante busca.");
             finished = true;
             searchStarted = false;
             screenShownFindSpringContact = false;
+            continuousMovementDone = false;
             return;
         }
         
-        // Move down
+        // Move down em pulsos
         stepperManager.moveSteps(chunkSteps, STEPPER_DIR_BACKWARD, 100);
         motorRealPositionMm = stepperManager.getPositionMm();
         
@@ -527,15 +544,17 @@ void TestMolaGrafset::executeStateFindSpringContact() {
         if (currentForceKg >= SPRING_CONTACT_FORCE_KG) {
             springContactDetected = true;
             springContactMotorPosRealMm = motorRealPositionMm;
-            Serial.print("[TESTE] MOLA DETECTADA! Forca: ");
+            Serial.print("[TESTE] MOLA DETECTADA (fase pulsos)! Forca: ");
             Serial.print(currentForceKg, 3);
-            Serial.print(" kg em posicao REAL: ");
+            Serial.print(" kg em posicao: ");
             Serial.print(springContactMotorPosRealMm, 1);
             Serial.println(" mm");
             
             currentState = STATE_RETURN_TO_TARE;
             searchStarted = false;
             screenShownFindSpringContact = false;
+            continuousMovementDone = false;
+            return;
         }
     } else if (!springContactDetected) {
         Serial.println("[TESTE] ERRO: Não foi possível detectar o ponto de contato!");
@@ -554,6 +573,8 @@ void TestMolaGrafset::executeStateFindSpringContact() {
         
         Serial.println("[TESTE] Aguardando confirmação para tentar novamente...");
         userInteractionTimeout = millis() + 60000;  // 1 minuto
+        searchStarted = false;
+        continuousMovementDone = false;
         
         // Aguardar clique do usuário
         while (millis() < userInteractionTimeout) {
@@ -637,11 +658,16 @@ void TestMolaGrafset::executeStateReturnToTare() {
 // ============== ZERA REFERÊNCIA ==============
 void TestMolaGrafset::executeStateZeroReference() {
     if (!screenShownZeroReference) {
+        // Define a referência de zero na posição aliviada (pós-tara),
+        // evitando comprimir ~2 mm antes da primeira leitura
+        motorRealPositionMm = stepperManager.getPositionMm();
+        springContactMotorPosRealMm = motorRealPositionMm;
+
         Serial.println("[TESTE] Etapa 8: Zerando referencia de posicao da mola...");
-        Serial.print("[TESTE] Offset de detecção: ");
+        Serial.print("[TESTE] Zero fixado em posicao aliviada: ");
         Serial.print(springContactMotorPosRealMm, 1);
         Serial.println(" mm");
-        Serial.println("[TESTE] Sistema pronto para compressão automática!");
+        Serial.println("[TESTE] Sistema pronto para compressao automatica (0 mm = contato aliviado)!");
         screenShownZeroReference = true;
     }
     
@@ -699,6 +725,12 @@ void TestMolaGrafset::executeStateCompressionSampling() {
         }
         float avgKg = soma / (float)N;
         lastForceKg = avgKg;
+        // Armazena amostra para regressão
+        if (sampleCount < MAX_SAMPLES) {
+            sampleX_mm[sampleCount] = moldCompressionReadingMm;
+            sampleF_kg[sampleCount] = avgKg;
+            sampleCount++;
+        }
         
         // Calcula K
         float currentK_kgf_mm = 0.0f;
@@ -751,6 +783,16 @@ void TestMolaGrafset::executeStateCompressionSampling() {
 // ============== RETORNA POSIÇÃO INICIAL ==============
 void TestMolaGrafset::executeStateReturnInitial() {
     if (!screenShownReturnInitial) {
+        // Ao finalizar a amostragem, calcula K por regressão linear na faixa útil (2 a 8mm)
+        float r2 = 0.0f;
+        float upper = selectedCourseMm < 8.0f ? selectedCourseMm : 8.0f;
+        float k_kgf_mm = computeSpringRateRegression(2.0f, upper, &r2);
+        if (k_kgf_mm > 0.0f) {
+            lastK_kgf_mm = k_kgf_mm;
+            lastK_N_mm = lastK_kgf_mm * 9.80665f;
+            lastR2 = r2;
+        }
+
         Serial.println("[TESTE] Etapa 10: Retornando motor para 30mm...");
         uiManager.drawTestStatus(lastForceKg,
                                  selectedCourseMm,
@@ -770,6 +812,55 @@ void TestMolaGrafset::executeStateReturnInitial() {
     }
     
     currentState = STATE_SHOW_RESULTS;
+}
+
+// Regressão linear F = a + k*x, usando amostras coletadas
+float TestMolaGrafset::computeSpringRateRegression(float lowMm, float highMm, float* outR2) {
+    // Acumula apenas pontos no intervalo [lowMm, highMm]
+    float sumX = 0.0f, sumY = 0.0f, sumXX = 0.0f, sumXY = 0.0f;
+    int n = 0;
+    float minX = lowMm, maxX = highMm;
+    for (int i = 0; i < sampleCount; ++i) {
+        float x = sampleX_mm[i];
+        float y = sampleF_kg[i];
+        if (x >= minX && x <= maxX) {
+            sumX += x;
+            sumY += y;
+            sumXX += x * x;
+            sumXY += x * y;
+            n++;
+        }
+    }
+    if (n < 2) {
+        if (outR2) *outR2 = 0.0f;
+        return 0.0f;
+    }
+    float xMean = sumX / n;
+    float yMean = sumY / n;
+    float denom = (sumXX - n * xMean * xMean);
+    if (denom == 0.0f) {
+        if (outR2) *outR2 = 0.0f;
+        return 0.0f;
+    }
+    float k = (sumXY - n * xMean * yMean) / denom; // kgf/mm
+    // Intercept a = yMean - k * xMean (não usado)
+
+    // R^2
+    if (outR2) {
+        float ssTot = 0.0f;
+        float ssRes = 0.0f;
+        for (int i = 0; i < sampleCount; ++i) {
+            float x = sampleX_mm[i];
+            float y = sampleF_kg[i];
+            if (x >= minX && x <= maxX) {
+                float yHat = (yMean - k * xMean) + k * x;
+                ssTot += (y - yMean) * (y - yMean);
+                ssRes += (y - yHat) * (y - yHat);
+            }
+        }
+        *outR2 = (ssTot > 0.0f) ? (1.0f - ssRes / ssTot) : 0.0f;
+    }
+    return k;
 }
 
 // ============== EXIBE RESULTADOS ==============
@@ -827,13 +918,18 @@ void TestMolaGrafset::executeStateShowResults() {
         char kNewtons[64];
         snprintf(kNewtons, sizeof(kNewtons), "K: %.3f N/mm", lastK_N_mm);
         uiManager.drawText(kNewtons, 100, 160, TFT_CYAN, 2);
+
+        // Mostra R^2 para avaliar linearidade da faixa usada
+        char r2Display[64];
+        snprintf(r2Display, sizeof(r2Display), "R^2: %.3f", lastR2);
+        uiManager.drawText(r2Display, 100, 185, TFT_YELLOW, 2);
         
         char forceDisplay[64];
         snprintf(forceDisplay, sizeof(forceDisplay), "Forca max: %.2f kg", lastForceKg);
         uiManager.drawText(forceDisplay, 90, 200, TFT_WHITE, 2);
         
         uiManager.drawText("", 10, 200, TFT_WHITE, 2);
-        uiManager.drawText("Click no botao para menu", 150, 285, TFT_YELLOW, 2);
+        uiManager.drawText("Click no botao para menu", 100, 285, TFT_YELLOW, 2);
         
         Serial.println("[TESTE] Teste de mola concluido com sucesso!");
         Serial.print("Ponto de contato (Motor REAL): ");

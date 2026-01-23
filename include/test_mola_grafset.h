@@ -55,6 +55,7 @@ private:
     
     float lastK_kgf_mm;
     float lastK_N_mm;
+    float lastR2;
     float lastForceKg;
     float selectedCourseMm;
     
@@ -92,6 +93,12 @@ private:
 
     // Tempo de entrada no estado AWAIT_SPRING_PLACEMENT para gating de clique
     unsigned long awaitSpringEntryTimeMs = 0;
+
+    // Amostras de compressão para regressão linear
+    static constexpr int MAX_SAMPLES = 41; // até 0..40 mm
+    float sampleX_mm[MAX_SAMPLES];
+    float sampleF_kg[MAX_SAMPLES];
+    int sampleCount = 0;
     
     // Métodos internos para cada etapa
     void executeStateSelectCourse();
@@ -110,6 +117,10 @@ private:
     
     // Auxiliares
     bool checkUserInteractionTimeout(unsigned long timeout);
+
+    // Calcula regressão linear F = a + k*x no intervalo [lowMm, highMm]
+    // Retorna k em kgf/mm e opcionalmente R^2 via ponteiro
+    float computeSpringRateRegression(float lowMm, float highMm, float* outR2 = nullptr);
 };
 
 #endif // TEST_MOLA_GRAFSET_H

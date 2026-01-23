@@ -70,6 +70,10 @@ public:
     // size: 1 (pequeno), 2 (médio), 3 (grande)
     void drawText(const char* text, int x, int y, uint16_t color, uint8_t size = 1);
 
+    // Desenha texto centralizado na tela (480x320)
+    // size: 1 (pequeno), 2 (médio), 3 (grande)
+    void drawCenteredText(const char* text, uint16_t color, uint8_t size = 1);
+
     // Preenche retângulo com cor sólida
     void fillRect(int x, int y, int w, int h, uint16_t color);
 

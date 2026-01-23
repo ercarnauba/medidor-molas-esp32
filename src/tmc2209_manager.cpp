@@ -6,7 +6,6 @@ TMC2209Manager tmc2209Manager;
 bool TMC2209Manager::begin() {
 #ifdef ARDUINO_ARCH_ESP32
     if (!TMC_UART_ENABLED) {
-        Serial.println("[TMC2209] UART preparada no software, mas desabilitada (TMC_UART_ENABLED=false)");
         return false;
     }
 
@@ -42,15 +41,12 @@ bool TMC2209Manager::begin() {
 
     int conn = _driver->test_connection();
     if (conn != 0) {
-        Serial.print("[TMC2209] Falha na comunicacao UART, code=");
-        Serial.println(conn);
         return false;
     }
 
-    Serial.println("[TMC2209] UART inicializada (comunicacao pronta, ainda não integrada ao loop de movimento)");
+    Serial.println("[TMC2209] UART inicializada");
     return true;
 #else
-    Serial.println("[TMC2209] UART nao suportada nesta arquitetura");
     return false;
 #endif
 }
