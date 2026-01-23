@@ -112,13 +112,13 @@ void UiManager::drawTestStatus(float forceKg,
     // Rodapé com K em fonte maior
     tft.fillRect(0, 255, 320, 40, TFT_BLACK);
     tft.setTextSize(2);
-    tft.setTextColor(TFT_GREEN, TFT_BLACK);  // K em kgf/mm em verde
+    tft.setTextColor(TFT_YELLOW, TFT_BLACK);  // K em N/mm em amarelo
     tft.setCursor(3, 255);
     if (done) {
-        tft.printf("K:%.3f kgf/mm", k_kgf_mm);
-        tft.setTextColor(TFT_YELLOW, TFT_BLACK);  // K em N/mm em amarelo
-        tft.setCursor(3, 273);
         tft.printf("K:%.3f N/mm", k_N_mm);
+        tft.setTextColor(TFT_GREEN, TFT_BLACK);  // K em kgf/mm em verde
+        tft.setCursor(3, 273);
+        tft.printf("K:%.3f kgf/mm", k_kgf_mm);
     } else {
         tft.setTextColor(TFT_YELLOW, TFT_BLACK);
         tft.print("K:calc...");
@@ -179,18 +179,18 @@ void UiManager::drawKValueAtStep(int step, float k_kgf_mm, float k_N_mm) {
     tft.setTextSize(1);
     int x = K_VALUES_X;
 
-    char bufKg[26];
-    snprintf(bufKg, sizeof(bufKg), "%dmm: %.2fKgf/mm", step, k_kgf_mm);
-    tft.setTextColor(TFT_GREEN, TFT_BLACK);  // kgf/mm em verde
-    tft.setCursor(x, yPos);
-    tft.print(bufKg);
-
-    int advance = (int)strlen(bufKg) * 6;  // fonte size=1 => 6px por char
+    char bufN[26];
+    snprintf(bufN, sizeof(bufN), "%dmm: %.2fN/mm", step, k_N_mm);
     tft.setTextColor(TFT_YELLOW, TFT_BLACK);  // N/mm em amarelo
-    tft.setCursor(x + advance + 6, yPos);
-    char bufN[20];
-    snprintf(bufN, sizeof(bufN), "%.2fN/mm", k_N_mm);
+    tft.setCursor(x, yPos);
     tft.print(bufN);
+
+    int advance = (int)strlen(bufN) * 6;  // fonte size=1 => 6px por char
+    tft.setTextColor(TFT_GREEN, TFT_BLACK);  // kgf/mm em verde
+    tft.setCursor(x + advance + 6, yPos);
+    char bufKg[20];
+    snprintf(bufKg, sizeof(bufKg), "%.2fKgf/mm", k_kgf_mm);
+    tft.print(bufKg);
 }
 
 // Adiciona ponto no gráfico (desloc x força, normalizado)

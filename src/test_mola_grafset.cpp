@@ -911,13 +911,13 @@ void TestMolaGrafset::executeStateShowResults() {
         uiManager.drawText("=== Teste Concluido ===", 20, 30, TFT_GREEN, 3);
         uiManager.drawText("", 10, 80, TFT_WHITE, 2);
         
-        char kDisplay[64];
-        snprintf(kDisplay, sizeof(kDisplay), "K: %.3f kgf/mm", lastK_kgf_mm);
-        uiManager.drawText(kDisplay, 60, 110, TFT_CYAN, 3);
-        
         char kNewtons[64];
         snprintf(kNewtons, sizeof(kNewtons), "K: %.3f N/mm", lastK_N_mm);
-        uiManager.drawText(kNewtons, 100, 160, TFT_CYAN, 2);
+        uiManager.drawText(kNewtons, 70, 110, TFT_CYAN, 3);
+        
+        char kDisplay[64];
+        snprintf(kDisplay, sizeof(kDisplay), "K: %.3f kgf/mm", lastK_kgf_mm);
+        uiManager.drawText(kDisplay, 100, 160, TFT_CYAN, 2);
 
         // Mostra R^2 para avaliar linearidade da faixa usada
         char r2Display[64];
