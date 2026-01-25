@@ -22,6 +22,7 @@ void EncoderManager::begin() {
     _buttonStableState = _lastButtonReading;
     _lastButtonChange = millis();
 
+    // Contar todas as bordas e acumular para 1 passo por detente
     attachInterrupt(digitalPinToInterrupt(ENC_CLK_PIN), encoderISR, CHANGE);
     attachInterrupt(digitalPinToInterrupt(ENC_SW_PIN),  encoderButtonISR, FALLING);
 }
@@ -59,6 +60,7 @@ void EncoderManager::update() {
             }
         }
 
+        // Detecta long press quando botão permanece pressionado por LONG_PRESS_MS
         if (_buttonStableState == LOW && !_longPressReported && _pressStartMillis > 0 &&
             (now - _pressStartMillis) >= LONG_PRESS_MS) {
             noInterrupts();
@@ -134,21 +136,23 @@ bool EncoderManager::wasButtonLongPressed() {
 // ==== ISRs ====
 
 void IRAM_ATTR encoderISR() {
-    // SEM debounce no encoder - confiamos na mecânica do encoder (usa contatos limpos)
-    // Apenas edge detection simples
+    // Edge detection com acumulação: converte múltiplas bordas em 1 passo lógico
     int stateCLK = digitalRead(ENC_CLK_PIN);
     int stateDT  = digitalRead(ENC_DT_PIN);
 
-    // Detectar mudança em CLK (edge detection)
     if (stateCLK != _encPtr->_lastStateCLK) {
         _encPtr->_lastStateCLK = stateCLK;
-        
-        // Determinar direção: se DT != CLK, sentido horário (+)
-        if (stateDT != stateCLK) {
+        int dir = (stateDT != stateCLK) ? +1 : -1;
+
+        int accum = _encPtr->_edgeAccum + dir;
+        if (accum >= ENCODER_EDGES_PER_STEP) {
             _encPtr->_position++;
-        } else {
+            accum -= ENCODER_EDGES_PER_STEP;
+        } else if (accum <= -ENCODER_EDGES_PER_STEP) {
             _encPtr->_position--;
+            accum += ENCODER_EDGES_PER_STEP;
         }
+        _encPtr->_edgeAccum = accum;
     }
 }
 

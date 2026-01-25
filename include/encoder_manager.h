@@ -23,6 +23,7 @@ public:
 private:
     volatile long _position      = 0;
     volatile int  _lastStateCLK  = HIGH;
+    volatile int  _edgeAccum     = 0;             // Acumulador de bordas para 1 passo por detente
     volatile unsigned long _lastEncoderTime = 0;  // Debounce encoder
     volatile unsigned long _lastButtonISRTime = 0;  // Debounce botão na ISR
     volatile bool _buttonClicked = false;

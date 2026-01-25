@@ -157,6 +157,17 @@ void UiManager::clearGraphArea() {
     // Moldura do gráfico
     tft.drawRect(gx, gy, gw, gh, TFT_DARKGREY);
 
+    // Linhas de grade (grid)
+    // Linhas verticais a cada 50 pixels aproximadamente (~5mm por divisão)
+    for (int x = gx + 50; x < gx + gw; x += 50) {
+        tft.drawFastVLine(x, gy + 1, gh - 2, TFT_DARKGREY);
+    }
+    
+    // Linhas horizontais a cada 40 pixels aproximadamente (~2kg por divisão)
+    for (int y = gy + 40; y < gy + gh; y += 40) {
+        tft.drawFastHLine(gx + 1, y, gw - 2, TFT_DARKGREY);
+    }
+
     // Labels dos eixos compactos
     tft.setTextSize(1);
     tft.setTextColor(TFT_CYAN, TFT_BLACK);

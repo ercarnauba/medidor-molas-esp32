@@ -32,6 +32,9 @@ constexpr int BL_PIN      = 21;  // GPIO 21 - ✅ Configurado tanto em config.h 
 constexpr int ENC_CLK_PIN = 13;  // GPIO 13 - ✅ Entrada digital (mudado de 18, que é SCLK do LCD)
 constexpr int ENC_DT_PIN  = 14;  // GPIO 14 - ✅ Entrada digital (mudado de 19, que é MISO do LCD)
 constexpr int ENC_SW_PIN  = 17;  // GPIO 17 - ✅ Entrada digital (mudado de 12, que tem boot conflict MTDI)
+// Número de bordas quadratura necessárias por passo lógico (ajuste conforme encoder)
+// Use 2 para encoders que geram 2 bordas por detente, 4 para 4 bordas por detente.
+constexpr int ENCODER_EDGES_PER_STEP = 2;
 
 // TMC2209 UART e DIAG (pré-configurado, comunicação permanece desabilitada por padrão)
 constexpr int TMC_UART_TX_PIN   = 22;   // GPIO 22 -> TX para TMC2209
